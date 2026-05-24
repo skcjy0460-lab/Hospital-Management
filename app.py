@@ -89,6 +89,19 @@ st.markdown("""
     .kpi-label { font-size:0.8rem; color:#666; margin-top:4px; }
     .kpi-delta { font-size:0.85rem; margin-top:2px; }
     .delta-pos { color:#2e7d32; } .delta-neg { color:#c62828; }
+
+    /* 회계서식 숫자 공통 */
+    .acct-num {
+        font-family: 'Consolas', 'D2Coding', monospace;
+        text-align: right; letter-spacing: 0.02em;
+    }
+    .acct-neg { color: #c62828; }   /* 음수 = 빨강+괄호 */
+    .acct-pos { color: #1a237e; }   /* 양수 = 네이비 */
+    .acct-zero{ color: #757575; }   /* 영 = 회색 */
+
+    /* dataframe 숫자 셀 우측 정렬 강제 */
+    [data-testid="stDataFrame"] td { text-align: right !important; }
+    [data-testid="stDataFrame"] td:first-child { text-align: left !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -107,9 +120,69 @@ for key, default in {
 
 # ── 헬퍼 함수 ────────────────────────────────────────────────────────────────
 def fmt_krw(v):
-    if v >= 1e8:  return f"{v/1e8:.1f}억원"
-    if v >= 1e4:  return f"{v/1e4:.0f}만원"
-    return f"{v:,.0f}원"
+    """회계서식: ₩ 기호 + 천단위 콤마, 음수는 괄호 표기"""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return "₩ -"
+    if v < 0:
+        return f"(₩ {abs(v):,.0f})"
+    return f"₩ {v:,.0f}"
+
+def fmt_krw_short(v):
+    """요약용 회계서식: 억/만 단위 축약 (음수 괄호)"""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return "₩ -"
+    neg = v < 0
+    av  = abs(v)
+    if av >= 1e8:
+        s = f"₩ {av/1e8:.2f}억"
+    elif av >= 1e4:
+        s = f"₩ {av/1e4:,.0f}만"
+    else:
+        s = f"₩ {av:,.0f}"
+    return f"({s})" if neg else s
+
+def fmt_krw_chart(v):
+    """차트 툴팁/레이블용: 축약형 (음수 괄호)"""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return "₩ -"
+    neg = v < 0
+    av  = abs(v)
+    if av >= 1e8:
+        s = f"₩ {av/1e8:.1f}억"
+    elif av >= 1e4:
+        s = f"₩ {av/1e4:.0f}만"
+    else:
+        s = f"₩ {av:,.0f}"
+    return f"({s})" if neg else s
+
+def apply_accounting_format(df, exclude_cols=None):
+    """DataFrame의 숫자 금액 컬럼을 회계서식 문자열로 변환한 복사본 반환"""
+    exclude_cols = set(exclude_cols or [])
+    # 금액 컬럼으로 판단할 키워드
+    money_keywords = ["매출","비용","급여","인건비","고정비","렌탈","유지보수","전기","수도",
+                      "통신","보험","소모품","약제","장비","위생","광고","SNS","이벤트","합계",
+                      "임차료","퇴직","인센티브","4대보험","소득세","마케팅","이익","수익",
+                      "금액","처방","평균급여","월인건비"]
+    result = df.copy()
+    for col in result.columns:
+        if col in exclude_cols:
+            continue
+        if not pd.api.types.is_numeric_dtype(result[col]):
+            continue
+        # 비율·횟수·건수·인원 컬럼은 제외
+        skip_kw = ["횟수","건수","비율","점수","인원","율","수","회"]
+        if any(k in col for k in skip_kw):
+            continue
+        # 금액 키워드가 포함되거나 숫자가 1,000원 이상인 경우 적용
+        if any(k in col for k in money_keywords) or result[col].abs().median() >= 1000:
+            result[col] = result[col].apply(fmt_krw)
+    return result
 
 def calc_score(ratio, thresholds):
     """thresholds: [(upper_bound, score), ...] 오름차순"""
@@ -425,7 +498,7 @@ def build_ai_prompt(hospital_name, analysis, data):
 ▶ 인건비율            : {lab.get('ratio_to_revenue',0):.1f}% (연간 {fmt_krw(lab.get('total',0))})
 ▶ 고정비율            : {fix.get('ratio_to_revenue',0):.1f}% (연간 {fmt_krw(fix.get('total',0))})
 ▶ 원가(소모품+약제)율  : {sup.get('ratio_to_revenue',0):.1f}%
-▶ 영업이익률          : {pro.get('op_margin',0):.1f}%
+▶ 영업이익률          : {pro.get('op_margin',0):.1f}%  (영업이익: {fmt_krw(pro.get('op_profit',0))})
 ▶ 월평균 신환 수       : {out.get('monthly_new',0):.0f}명
 ▶ 신환비율            : {out.get('new_patient_ratio',0):.1f}%
 ▶ 1인당 평균내원횟수  : {out.get('avg_visits',0):.2f}회
@@ -710,16 +783,27 @@ with tabs[0]:
         if not rev_df.empty and "총매출" in rev_df.columns:
             fig_rev = go.Figure()
             if "급여매출" in rev_df.columns:
-                fig_rev.add_bar(x=rev_df["월"], y=rev_df["급여매출"],
-                                name="급여매출", marker_color="#1565c0")
+                fig_rev.add_bar(
+                    x=rev_df["월"], y=rev_df["급여매출"],
+                    name="급여매출", marker_color="#1565c0",
+                    hovertemplate="<b>%{x}</b><br>급여매출: %{customdata}<extra></extra>",
+                    customdata=[fmt_krw(v) for v in rev_df["급여매출"]])
             if "비급여매출" in rev_df.columns:
-                fig_rev.add_bar(x=rev_df["월"], y=rev_df["비급여매출"],
-                                name="비급여매출", marker_color="#42a5f5")
-            fig_rev.add_scatter(x=rev_df["월"], y=rev_df["총매출"],
-                                name="총매출", line=dict(color="#ff6f00", width=2.5))
-            fig_rev.update_layout(barmode="stack", height=320,
-                                  margin=dict(l=0,r=0,t=20,b=0),
-                                  legend=dict(orientation="h",y=-0.15))
+                fig_rev.add_bar(
+                    x=rev_df["월"], y=rev_df["비급여매출"],
+                    name="비급여매출", marker_color="#42a5f5",
+                    hovertemplate="<b>%{x}</b><br>비급여매출: %{customdata}<extra></extra>",
+                    customdata=[fmt_krw(v) for v in rev_df["비급여매출"]])
+            fig_rev.add_scatter(
+                x=rev_df["월"], y=rev_df["총매출"],
+                name="총매출", line=dict(color="#ff6f00", width=2.5),
+                hovertemplate="<b>%{x}</b><br>총매출: %{customdata}<extra></extra>",
+                customdata=[fmt_krw(v) for v in rev_df["총매출"]])
+            fig_rev.update_layout(
+                barmode="stack", height=320,
+                margin=dict(l=0,r=0,t=20,b=0),
+                legend=dict(orientation="h",y=-0.15),
+                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
             st.plotly_chart(fig_rev, use_container_width=True)
 
     # 비용 구성 파이차트
@@ -767,14 +851,23 @@ with tabs[1]:
         c4.metric("1인당 평균처방", fmt_krw(rev_df["1인당평균처방금액"].mean()) if "1인당평균처방금액" in rev_df.columns else "-")
 
         st.markdown("#### 매출 상세 데이터")
-        st.dataframe(rev_df, use_container_width=True, hide_index=True)
+        st.dataframe(apply_accounting_format(rev_df, exclude_cols=["월","수납건수"]),
+                     use_container_width=True, hide_index=True)
 
         if "급여매출" in rev_df.columns and "비급여매출" in rev_df.columns:
             col1, col2 = st.columns(2)
             with col1:
-                fig = px.line(rev_df, x="월", y=["급여매출","비급여매출","총매출"],
-                              title="매출 트렌드", markers=True)
-                fig.update_layout(height=300)
+                fig = go.Figure()
+                for col_name, color in [("급여매출","#1565c0"),("비급여매출","#42a5f5"),("총매출","#ff6f00")]:
+                    if col_name in rev_df.columns:
+                        fig.add_scatter(
+                            x=rev_df["월"], y=rev_df[col_name],
+                            name=col_name, mode="lines+markers",
+                            line=dict(color=color, width=2),
+                            hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
+                            customdata=[fmt_krw(v) for v in rev_df[col_name]])
+                fig.update_layout(title="매출 트렌드", height=300,
+                                  yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
                 nhi_sum    = rev_df["급여매출"].sum()
@@ -783,33 +876,38 @@ with tabs[1]:
                     labels=["급여매출","비급여매출"],
                     values=[nhi_sum, non_nhi],
                     hole=0.4,
-                    marker_colors=["#1565c0","#42a5f5"]
+                    marker_colors=["#1565c0","#42a5f5"],
+                    hovertemplate="<b>%{label}</b><br>금액: %{customdata}<br>비율: %{percent}<extra></extra>",
+                    customdata=[fmt_krw(nhi_sum), fmt_krw(non_nhi)]
                 ))
                 fig2.update_layout(title="급여/비급여 비율", height=300)
                 st.plotly_chart(fig2, use_container_width=True)
 
         if "1인당평균처방금액" in rev_df.columns:
-            fig3 = px.bar(rev_df, x="월", y="1인당평균처방금액",
-                          title="1인당 평균 처방금액 추이",
-                          color="1인당평균처방금액",
-                          color_continuous_scale="Blues")
-            fig3.add_hline(y=rev_df["1인당평균처방금액"].mean(),
-                           line_dash="dash", line_color="red",
-                           annotation_text="평균")
-            fig3.update_layout(height=280)
+            avg_pres = rev_df["1인당평균처방금액"].mean()
+            fig3 = go.Figure(go.Bar(
+                x=rev_df["월"], y=rev_df["1인당평균처방금액"],
+                marker_color=rev_df["1인당평균처방금액"],
+                marker_colorscale="Blues",
+                hovertemplate="<b>%{x}</b><br>1인당 처방금액: %{customdata}<extra></extra>",
+                customdata=[fmt_krw(v) for v in rev_df["1인당평균처방금액"]]))
+            fig3.add_hline(y=avg_pres, line_dash="dash", line_color="red",
+                           annotation_text=f"평균: {fmt_krw(avg_pres)}")
+            fig3.update_layout(title="1인당 평균 처방금액 추이", height=280,
+                               yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
             st.plotly_chart(fig3, use_container_width=True)
 
-        # 프로 이상: 벤치마크
         if plan in ("pro", "premium"):
             st.markdown('<div class="section-header">📊 업종 벤치마크 비교 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
             avg_rev = rev_df["총매출"].mean() if "총매출" in rev_df.columns else 0
+            avg_pres_val = rev_df["1인당평균처방금액"].mean() if "1인당평균처방금액" in rev_df.columns else 0
             bench = {
                 "지표": ["월평균 매출","1인당 처방금액","비급여 비율"],
                 "본원": [fmt_krw(avg_rev),
-                         fmt_krw(rev_df["1인당평균처방금액"].mean() if "1인당평균처방금액" in rev_df.columns else 0),
+                         fmt_krw(avg_pres_val),
                          f"{analysis['revenue']['non_nhi_ratio']:.1f}%"],
-                "업종 평균": ["3,200만원","42,000원","28%"],
-                "상위 20%": ["5,500만원","62,000원","45%"],
+                "업종 평균": [fmt_krw(32000000), fmt_krw(42000), "28.0%"],
+                "상위 20%":  [fmt_krw(55000000), fmt_krw(62000), "45.0%"],
             }
             st.dataframe(pd.DataFrame(bench), use_container_width=True, hide_index=True)
         else:
@@ -836,14 +934,24 @@ with tabs[2]:
                   color_score(lab_info.get("score",0)))
 
         st.markdown("#### 월별 인건비 내역")
-        st.dataframe(lab_df, use_container_width=True, hide_index=True)
+        st.dataframe(apply_accounting_format(lab_df, exclude_cols=["월"]),
+                     use_container_width=True, hide_index=True)
 
         num_cols = [c for c in lab_df.columns if c != "월"]
         if num_cols:
-            fig = px.bar(lab_df, x="월", y=num_cols,
-                         title="인건비 구성 추이", barmode="stack",
-                         color_discrete_sequence=px.colors.sequential.Blues_r)
-            fig.update_layout(height=300, legend=dict(orientation="h",y=-0.2))
+            fig = go.Figure()
+            palette = ["#0d47a1","#1565c0","#1976d2","#1e88e5","#42a5f5","#90caf9"]
+            for i, col_name in enumerate(num_cols):
+                fig.add_bar(
+                    x=lab_df["월"], y=lab_df[col_name],
+                    name=col_name,
+                    marker_color=palette[i % len(palette)],
+                    hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
+                    customdata=[fmt_krw(v) for v in lab_df[col_name]])
+            fig.update_layout(
+                title="인건비 구성 추이", barmode="stack", height=300,
+                legend=dict(orientation="h", y=-0.2),
+                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
             st.plotly_chart(fig, use_container_width=True)
 
         # 직원 현황
@@ -851,7 +959,8 @@ with tabs[2]:
             st.markdown("#### 직원 구성 현황")
             col1, col2 = st.columns(2)
             with col1:
-                st.dataframe(stf_df, use_container_width=True, hide_index=True)
+                st.dataframe(apply_accounting_format(stf_df, exclude_cols=["직종","인원수"]),
+                             use_container_width=True, hide_index=True)
             with col2:
                 if "인원수" in stf_df.columns and "직종" in stf_df.columns:
                     fig_stf = px.pie(stf_df, values="인원수", names="직종",
@@ -906,33 +1015,63 @@ with tabs[3]:
     with col1:
         if not fix_df.empty:
             st.markdown("#### 고정비 내역")
-            st.dataframe(fix_df, use_container_width=True, hide_index=True)
+            st.dataframe(apply_accounting_format(fix_df, exclude_cols=["월"]),
+                         use_container_width=True, hide_index=True)
             num_cols = [c for c in fix_df.columns if c != "월"]
             if num_cols:
-                fig = px.area(fix_df, x="월", y=num_cols,
-                              title="고정비 추이", color_discrete_sequence=px.colors.sequential.Blues)
-                fig.update_layout(height=280, legend=dict(orientation="h",y=-0.3))
+                fig = go.Figure()
+                palette = px.colors.sequential.Blues
+                for i, col_name in enumerate(num_cols):
+                    fig.add_scatter(
+                        x=fix_df["월"], y=fix_df[col_name],
+                        name=col_name, fill="tonexty" if i > 0 else "tozeroy",
+                        line=dict(color=palette[min(i+2, len(palette)-1)]),
+                        hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
+                        customdata=[fmt_krw(v) for v in fix_df[col_name]])
+                fig.update_layout(
+                    title="고정비 추이", height=280,
+                    legend=dict(orientation="h", y=-0.3),
+                    yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
                 st.plotly_chart(fig, use_container_width=True)
     with col2:
         if not sup_df.empty:
             st.markdown("#### 소모품/약제 내역")
-            st.dataframe(sup_df, use_container_width=True, hide_index=True)
+            st.dataframe(apply_accounting_format(sup_df, exclude_cols=["월"]),
+                         use_container_width=True, hide_index=True)
             num_cols = [c for c in sup_df.columns if c != "월"]
             if num_cols:
-                fig2 = px.bar(sup_df, x="월", y=num_cols,
-                              title="소모품/약제비 추이", barmode="stack",
-                              color_discrete_sequence=px.colors.sequential.Oranges)
-                fig2.update_layout(height=280, legend=dict(orientation="h",y=-0.3))
+                fig2 = go.Figure()
+                palette2 = px.colors.sequential.Oranges
+                for i, col_name in enumerate(num_cols):
+                    fig2.add_bar(
+                        x=sup_df["월"], y=sup_df[col_name],
+                        name=col_name,
+                        marker_color=palette2[min(i+2, len(palette2)-1)],
+                        hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
+                        customdata=[fmt_krw(v) for v in sup_df[col_name]])
+                fig2.update_layout(
+                    title="소모품/약제비 추이", barmode="stack", height=280,
+                    legend=dict(orientation="h", y=-0.3),
+                    yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
                 st.plotly_chart(fig2, use_container_width=True)
 
     if not mkt_df.empty:
         st.markdown("#### 마케팅 비용 내역")
         num_cols = [c for c in mkt_df.columns if c != "월"]
         if num_cols:
-            fig3 = px.bar(mkt_df, x="월", y=num_cols,
-                          title="마케팅 비용 추이", barmode="stack",
-                          color_discrete_sequence=px.colors.sequential.Greens)
-            fig3.update_layout(height=250, legend=dict(orientation="h",y=-0.3))
+            fig3 = go.Figure()
+            palette3 = px.colors.sequential.Greens
+            for i, col_name in enumerate(num_cols):
+                fig3.add_bar(
+                    x=mkt_df["월"], y=mkt_df[col_name],
+                    name=col_name,
+                    marker_color=palette3[min(i+2, len(palette3)-1)],
+                    hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
+                    customdata=[fmt_krw(v) for v in mkt_df[col_name]])
+            fig3.update_layout(
+                title="마케팅 비용 추이", barmode="stack", height=250,
+                legend=dict(orientation="h", y=-0.3),
+                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
             st.plotly_chart(fig3, use_container_width=True)
 
     if plan in ("pro","premium"):
@@ -941,13 +1080,15 @@ with tabs[3]:
         sup_ratio = analysis["supply"]["ratio_to_revenue"]
         data_rows = []
         if fix_ratio > 20:
-            data_rows.append({"항목":"고정비", "현재비율":f"{fix_ratio:.1f}%","업종평균":"18%","절감목표":"18%",
-                               "예상절감액":fmt_krw(analysis["revenue"]["total"]*(fix_ratio-18)/100),
-                               "우선순위":"⭐⭐⭐"})
+            saving = analysis["revenue"]["total"] * (fix_ratio - 18) / 100
+            data_rows.append({
+                "항목": "고정비", "현재비율": f"{fix_ratio:.1f}%", "업종평균": "18.0%",
+                "절감목표": "18.0%", "예상절감액": fmt_krw(saving), "우선순위": "⭐⭐⭐"})
         if sup_ratio > 12:
-            data_rows.append({"항목":"소모품/약제비","현재비율":f"{sup_ratio:.1f}%","업종평균":"10%","절감목표":"10%",
-                               "예상절감액":fmt_krw(analysis["revenue"]["total"]*(sup_ratio-10)/100),
-                               "우선순위":"⭐⭐"})
+            saving2 = analysis["revenue"]["total"] * (sup_ratio - 10) / 100
+            data_rows.append({
+                "항목": "소모품/약제비", "현재비율": f"{sup_ratio:.1f}%", "업종평균": "10.0%",
+                "절감목표": "10.0%", "예상절감액": fmt_krw(saving2), "우선순위": "⭐⭐"})
         if data_rows:
             st.dataframe(pd.DataFrame(data_rows), use_container_width=True, hide_index=True)
         else:
@@ -1044,10 +1185,11 @@ with tabs[5]:
                     -mkt_total/rev_total*100 if rev_total else 0,
                     op_profit/rev_total*100 if rev_total else 0]
     })
-    pnl["금액(원)"]   = pnl["금액"].apply(lambda x: f"{'▼ ' if x<0 else '▲ '}{fmt_krw(abs(x))}")
-    pnl["비율(%)"]    = pnl["비율(%)"].apply(lambda x: f"{x:+.1f}%")
+    # 회계서식: 양수 ₩ X,XXX / 음수 (₩ X,XXX) / 비율 +/-%
+    pnl["금액(회계)"] = pnl["금액"].apply(fmt_krw)
+    pnl["비율(%)"]   = pnl["비율(%)"].apply(lambda x: f"({abs(x):.1f}%)" if x < 0 else f"{x:.1f}%")
     st.markdown("#### 손익 구조 요약")
-    st.dataframe(pnl[["항목","금액(원)","비율(%)"]], use_container_width=True, hide_index=True)
+    st.dataframe(pnl[["항목","금액(회계)","비율(%)"]], use_container_width=True, hide_index=True)
 
     # 손익 폭포수 차트
     fig_wf = go.Figure(go.Waterfall(
@@ -1061,10 +1203,13 @@ with tabs[5]:
         connector={"line":{"color":"rgb(63,63,63)"}},
         increasing={"marker":{"color":"#1565c0"}},
         decreasing={"marker":{"color":"#c62828"}},
-        totals={"marker":{"color":"#2e7d32"}}
+        totals={"marker":{"color":"#2e7d32"}},
+        hovertemplate="<b>%{x}</b><br>금액: %{text}<extra></extra>"
     ))
-    fig_wf.update_layout(title="손익 폭포수 차트", height=380,
-                         margin=dict(l=0,r=0,t=40,b=0))
+    fig_wf.update_layout(
+        title="손익 폭포수 차트", height=380,
+        margin=dict(l=0,r=0,t=40,b=0),
+        yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
     st.plotly_chart(fig_wf, use_container_width=True)
 
     if plan in ("pro","premium"):
@@ -1092,8 +1237,8 @@ with tabs[5]:
 
         st.markdown("---")
         sc1,sc2,sc3 = st.columns(3)
-        sc1.metric("예상 연간 매출", fmt_krw(new_rev), f"{(new_rev-rev_total)/rev_total*100:+.1f}%")
-        sc2.metric("예상 영업이익", fmt_krw(new_profit), f"{(new_profit-op_profit)/max(abs(op_profit),1)*100:+.1f}%")
+        sc1.metric("예상 연간 매출",  fmt_krw(new_rev),    f"{(new_rev-rev_total)/rev_total*100:+.1f}%")
+        sc2.metric("예상 영업이익",   fmt_krw(new_profit),  f"{(new_profit-op_profit)/max(abs(op_profit),1)*100:+.1f}%")
         sc3.metric("예상 영업이익률", f"{new_margin:.1f}%", f"{new_margin-pro_info.get('op_margin',0):+.1f}%p")
     else:
         st.markdown('<div class="lock-overlay">🔒 수익 개선 시뮬레이션은 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
@@ -1221,24 +1366,65 @@ with tabs[7]:
 
     <h3>1. 경영 현황 요약</h3>
     <table width="100%" style="border-collapse:collapse;font-size:0.9rem">
-    <tr style="background:#e3f2fd"><th>구분</th><th>지표</th><th>수치</th><th>평가</th></tr>
-    <tr><td>매출</td><td>연간 총매출</td><td><b>{fmt_krw(rev_info.get('total',0))}</b></td>
-        <td>{'🟢 양호' if rev_info.get('growth_rate',0)>0 else '🔴 감소'}</td></tr>
-    <tr style="background:#f5f5f5"><td>매출</td><td>매출 성장률</td>
-        <td>{rev_info.get('growth_rate',0):+.1f}%</td>
-        <td>{'🟢' if rev_info.get('growth_rate',0)>5 else '🟡' if rev_info.get('growth_rate',0)>0 else '🔴'}</td></tr>
-    <tr><td>인건비</td><td>인건비율</td><td>{lab_info.get('ratio_to_revenue',0):.1f}%</td>
-        <td>{'🟢 적정' if lab_info.get('ratio_to_revenue',0)<50 else '🟡 주의' if lab_info.get('ratio_to_revenue',0)<60 else '🔴 과다'}</td></tr>
-    <tr style="background:#f5f5f5"><td>고정비</td><td>고정비율</td><td>{fix_info.get('ratio_to_revenue',0):.1f}%</td>
-        <td>{'🟢 적정' if fix_info.get('ratio_to_revenue',0)<20 else '🟡 주의' if fix_info.get('ratio_to_revenue',0)<25 else '🔴 과다'}</td></tr>
-    <tr><td>원가</td><td>소모품/약제비율</td><td>{sup_info.get('ratio_to_revenue',0):.1f}%</td>
-        <td>{'🟢 적정' if sup_info.get('ratio_to_revenue',0)<12 else '🟡 주의' if sup_info.get('ratio_to_revenue',0)<18 else '🔴 과다'}</td></tr>
-    <tr style="background:#f5f5f5"><td>수익성</td><td>영업이익률</td><td>{pro_info.get('op_margin',0):.1f}%</td>
-        <td>{'🟢 우수' if pro_info.get('op_margin',0)>15 else '🟡 양호' if pro_info.get('op_margin',0)>8 else '🔴 개선필요'}</td></tr>
-    <tr><td>환자</td><td>신환비율</td><td>{out_info.get('new_patient_ratio',0):.1f}%</td>
-        <td>{'🟢 우수' if out_info.get('new_patient_ratio',0)>12 else '🟡 보통' if out_info.get('new_patient_ratio',0)>7 else '🔴 저조'}</td></tr>
-    <tr style="background:#e8f5e9"><td colspan="2"><b>종합 경영점수</b></td>
-        <td colspan="2"><b>{color_score(ovr_info.get('score',0))} {ovr_info.get('score',0):.0f} / 100점</b></td></tr>
+    <tr style="background:#e3f2fd"><th style="padding:6px;border:1px solid #ccc">구분</th><th style="padding:6px;border:1px solid #ccc">지표</th><th style="padding:6px;border:1px solid #ccc;text-align:right">수치</th><th style="padding:6px;border:1px solid #ccc">평가</th></tr>
+    <tr>
+      <td style="padding:6px;border:1px solid #eee">매출</td>
+      <td style="padding:6px;border:1px solid #eee">연간 총매출</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace"><b>{fmt_krw(rev_info.get('total',0))}</b></td>
+      <td style="padding:6px;border:1px solid #eee">{'🟢 양호' if rev_info.get('growth_rate',0)>0 else '🔴 감소'}</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <td style="padding:6px;border:1px solid #eee">매출</td>
+      <td style="padding:6px;border:1px solid #eee">매출 성장률</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right">{rev_info.get('growth_rate',0):+.1f}%</td>
+      <td style="padding:6px;border:1px solid #eee">{'🟢' if rev_info.get('growth_rate',0)>5 else '🟡' if rev_info.get('growth_rate',0)>0 else '🔴'}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;border:1px solid #eee">매출</td>
+      <td style="padding:6px;border:1px solid #eee">월평균 매출</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(rev_info.get('monthly_avg',0))}</td>
+      <td style="padding:6px;border:1px solid #eee">—</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <td style="padding:6px;border:1px solid #eee">매출</td>
+      <td style="padding:6px;border:1px solid #eee">1인당 평균처방금액</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(rev_info.get('avg_prescription',0))}</td>
+      <td style="padding:6px;border:1px solid #eee">—</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;border:1px solid #eee">인건비</td>
+      <td style="padding:6px;border:1px solid #eee">연간 인건비</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(lab_info.get('total',0))}</td>
+      <td style="padding:6px;border:1px solid #eee">인건비율 {lab_info.get('ratio_to_revenue',0):.1f}%<br>{'🟢 적정' if lab_info.get('ratio_to_revenue',0)<50 else '🟡 주의' if lab_info.get('ratio_to_revenue',0)<60 else '🔴 과다'}</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <td style="padding:6px;border:1px solid #eee">고정비</td>
+      <td style="padding:6px;border:1px solid #eee">연간 고정비</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(fix_info.get('total',0))}</td>
+      <td style="padding:6px;border:1px solid #eee">고정비율 {fix_info.get('ratio_to_revenue',0):.1f}%<br>{'🟢 적정' if fix_info.get('ratio_to_revenue',0)<20 else '🟡 주의' if fix_info.get('ratio_to_revenue',0)<25 else '🔴 과다'}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;border:1px solid #eee">원가</td>
+      <td style="padding:6px;border:1px solid #eee">소모품/약제비율</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right">{sup_info.get('ratio_to_revenue',0):.1f}%</td>
+      <td style="padding:6px;border:1px solid #eee">{'🟢 적정' if sup_info.get('ratio_to_revenue',0)<12 else '🟡 주의' if sup_info.get('ratio_to_revenue',0)<18 else '🔴 과다'}</td>
+    </tr>
+    <tr style="background:#f5f5f5">
+      <td style="padding:6px;border:1px solid #eee">수익성</td>
+      <td style="padding:6px;border:1px solid #eee">영업이익</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(pro_info.get('op_profit',0))}</td>
+      <td style="padding:6px;border:1px solid #eee">이익률 {pro_info.get('op_margin',0):.1f}%<br>{'🟢 우수' if pro_info.get('op_margin',0)>15 else '🟡 양호' if pro_info.get('op_margin',0)>8 else '🔴 개선필요'}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px;border:1px solid #eee">환자</td>
+      <td style="padding:6px;border:1px solid #eee">신환비율</td>
+      <td style="padding:6px;border:1px solid #eee;text-align:right">{out_info.get('new_patient_ratio',0):.1f}%</td>
+      <td style="padding:6px;border:1px solid #eee">{'🟢 우수' if out_info.get('new_patient_ratio',0)>12 else '🟡 보통' if out_info.get('new_patient_ratio',0)>7 else '🔴 저조'}</td>
+    </tr>
+    <tr style="background:#e8f5e9">
+      <td colspan="2" style="padding:6px;border:1px solid #ccc"><b>종합 경영점수</b></td>
+      <td colspan="2" style="padding:6px;border:1px solid #ccc;text-align:center"><b>{color_score(ovr_info.get('score',0))} {ovr_info.get('score',0):.0f} / 100점</b></td>
+    </tr>
     </table>
 
     <h3 style="margin-top:1.5rem">2. 주요 개선 과제</h3>
@@ -1332,14 +1518,15 @@ with tabs[7]:
                 for sheet_name, df in data.items():
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
                 summary = pd.DataFrame({
-                    "지표":["연간총매출","월평균매출","영업이익률","인건비율","고정비율","신환비율","종합점수"],
-                    "값":[fmt_krw(rev_info.get("total",0)),
-                          fmt_krw(rev_info.get("monthly_avg",0)),
-                          f"{pro_info.get('op_margin',0):.1f}%",
-                          f"{lab_info.get('ratio_to_revenue',0):.1f}%",
-                          f"{fix_info.get('ratio_to_revenue',0):.1f}%",
-                          f"{out_info.get('new_patient_ratio',0):.1f}%",
-                          f"{ovr_info.get('score',0):.0f}/100"]
+                    "지표": ["연간총매출","월평균매출","연간영업이익","영업이익률","인건비율","고정비율","신환비율","종합점수"],
+                    "값":   [fmt_krw(rev_info.get("total",0)),
+                             fmt_krw(rev_info.get("monthly_avg",0)),
+                             fmt_krw(pro_info.get("op_profit",0)),
+                             f"{pro_info.get('op_margin',0):.1f}%",
+                             f"{lab_info.get('ratio_to_revenue',0):.1f}%",
+                             f"{fix_info.get('ratio_to_revenue',0):.1f}%",
+                             f"{out_info.get('new_patient_ratio',0):.1f}%",
+                             f"{ovr_info.get('score',0):.0f}/100"]
                 })
                 summary.to_excel(writer, sheet_name="진단요약", index=False)
             st.download_button(
