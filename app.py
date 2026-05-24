@@ -120,45 +120,45 @@ for key, default in {
 
 # ── 헬퍼 함수 ────────────────────────────────────────────────────────────────
 def fmt_krw(v):
-    """회계서식: ₩ 기호 + 천단위 콤마, 음수는 괄호 표기"""
+    """회계서식: 천단위 콤마, 음수는 괄호 표기"""
     try:
         v = float(v)
     except (TypeError, ValueError):
-        return "₩ -"
+        return "-"
     if v < 0:
-        return f"(₩ {abs(v):,.0f})"
-    return f"₩ {v:,.0f}"
+        return f"({abs(v):,.0f})"
+    return f"{v:,.0f}"
 
 def fmt_krw_short(v):
-    """요약용 회계서식: 억/만 단위 축약 (음수 괄호)"""
+    """요약용 회계서식: 억/만 단위 축약, 음수 괄호 표기"""
     try:
         v = float(v)
     except (TypeError, ValueError):
-        return "₩ -"
+        return "-"
     neg = v < 0
     av  = abs(v)
     if av >= 1e8:
-        s = f"₩ {av/1e8:.2f}억"
+        s = f"{av/1e8:.2f}억"
     elif av >= 1e4:
-        s = f"₩ {av/1e4:,.0f}만"
+        s = f"{av/1e4:,.0f}만"
     else:
-        s = f"₩ {av:,.0f}"
+        s = f"{av:,.0f}"
     return f"({s})" if neg else s
 
 def fmt_krw_chart(v):
-    """차트 툴팁/레이블용: 축약형 (음수 괄호)"""
+    """차트 툴팁/레이블용: 축약형, 음수 괄호 표기"""
     try:
         v = float(v)
     except (TypeError, ValueError):
-        return "₩ -"
+        return "-"
     neg = v < 0
     av  = abs(v)
     if av >= 1e8:
-        s = f"₩ {av/1e8:.1f}억"
+        s = f"{av/1e8:.1f}억"
     elif av >= 1e4:
-        s = f"₩ {av/1e4:.0f}만"
+        s = f"{av/1e4:.0f}만"
     else:
-        s = f"₩ {av:,.0f}"
+        s = f"{av:,.0f}"
     return f"({s})" if neg else s
 
 def apply_accounting_format(df, exclude_cols=None):
@@ -803,7 +803,7 @@ with tabs[0]:
                 barmode="stack", height=320,
                 margin=dict(l=0,r=0,t=20,b=0),
                 legend=dict(orientation="h",y=-0.15),
-                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                yaxis=dict(tickformat=",.0f"))
             st.plotly_chart(fig_rev, use_container_width=True)
 
     # 비용 구성 파이차트
@@ -867,7 +867,7 @@ with tabs[1]:
                             hovertemplate=f"<b>%{{x}}</b><br>{col_name}: %{{customdata}}<extra></extra>",
                             customdata=[fmt_krw(v) for v in rev_df[col_name]])
                 fig.update_layout(title="매출 트렌드", height=300,
-                                  yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                                  yaxis=dict(tickformat=",.0f"))
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
                 nhi_sum    = rev_df["급여매출"].sum()
@@ -894,7 +894,7 @@ with tabs[1]:
             fig3.add_hline(y=avg_pres, line_dash="dash", line_color="red",
                            annotation_text=f"평균: {fmt_krw(avg_pres)}")
             fig3.update_layout(title="1인당 평균 처방금액 추이", height=280,
-                               yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                               yaxis=dict(tickformat=",.0f"))
             st.plotly_chart(fig3, use_container_width=True)
 
         if plan in ("pro", "premium"):
@@ -951,7 +951,7 @@ with tabs[2]:
             fig.update_layout(
                 title="인건비 구성 추이", barmode="stack", height=300,
                 legend=dict(orientation="h", y=-0.2),
-                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                yaxis=dict(tickformat=",.0f"))
             st.plotly_chart(fig, use_container_width=True)
 
         # 직원 현황
@@ -1031,7 +1031,7 @@ with tabs[3]:
                 fig.update_layout(
                     title="고정비 추이", height=280,
                     legend=dict(orientation="h", y=-0.3),
-                    yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                    yaxis=dict(tickformat=",.0f"))
                 st.plotly_chart(fig, use_container_width=True)
     with col2:
         if not sup_df.empty:
@@ -1052,7 +1052,7 @@ with tabs[3]:
                 fig2.update_layout(
                     title="소모품/약제비 추이", barmode="stack", height=280,
                     legend=dict(orientation="h", y=-0.3),
-                    yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                    yaxis=dict(tickformat=",.0f"))
                 st.plotly_chart(fig2, use_container_width=True)
 
     if not mkt_df.empty:
@@ -1071,7 +1071,7 @@ with tabs[3]:
             fig3.update_layout(
                 title="마케팅 비용 추이", barmode="stack", height=250,
                 legend=dict(orientation="h", y=-0.3),
-                yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+                yaxis=dict(tickformat=",.0f"))
             st.plotly_chart(fig3, use_container_width=True)
 
     if plan in ("pro","premium"):
@@ -1185,7 +1185,7 @@ with tabs[5]:
                     -mkt_total/rev_total*100 if rev_total else 0,
                     op_profit/rev_total*100 if rev_total else 0]
     })
-    # 회계서식: 양수 ₩ X,XXX / 음수 (₩ X,XXX) / 비율 +/-%
+    # 회계서식: 양수 X,XXX / 음수 (X,XXX) / 비율 괄호 표기
     pnl["금액(회계)"] = pnl["금액"].apply(fmt_krw)
     pnl["비율(%)"]   = pnl["비율(%)"].apply(lambda x: f"({abs(x):.1f}%)" if x < 0 else f"{x:.1f}%")
     st.markdown("#### 손익 구조 요약")
@@ -1209,7 +1209,7 @@ with tabs[5]:
     fig_wf.update_layout(
         title="손익 폭포수 차트", height=380,
         margin=dict(l=0,r=0,t=40,b=0),
-        yaxis=dict(tickprefix="₩ ", tickformat=",.0f"))
+        yaxis=dict(tickformat=",.0f"))
     st.plotly_chart(fig_wf, use_container_width=True)
 
     if plan in ("pro","premium"):
