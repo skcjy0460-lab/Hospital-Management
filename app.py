@@ -184,6 +184,387 @@ def apply_accounting_format(df, exclude_cols=None):
             result[col] = result[col].apply(fmt_krw)
     return result
 
+
+# ── A4 HTML 보고서 생성 함수 ─────────────────────────────────────────────────
+def build_html_report(hospital_name, analysis, data, now_str):
+    rev_info = analysis.get("revenue",{})
+    lab_info = analysis.get("labor",{})
+    fix_info = analysis.get("fixed",{})
+    sup_info = analysis.get("supply",{})
+    out_info = analysis.get("outpatient",{})
+    pro_info = analysis.get("profitability",{})
+    ovr_info = analysis.get("overall",{})
+
+    score = ovr_info.get("score", 0)
+    score_color = ("#2e7d32" if score>=75 else
+                   "#f57f17" if score>=60 else "#c62828")
+
+    def badge(val, good, warn):
+        if val >= good:   return f'<span style="color:#2e7d32;font-weight:600">● 양호</span>'
+        if val >= warn:   return f'<span style="color:#f57f17;font-weight:600">● 주의</span>'
+        return f'<span style="color:#c62828;font-weight:600">● 개선필요</span>'
+    def badge_rev(ratio, bad, warn):
+        # 낮을수록 좋은 지표 (비용율)
+        if ratio <= warn: return f'<span style="color:#2e7d32;font-weight:600">● 적정</span>'
+        if ratio <= bad:  return f'<span style="color:#f57f17;font-weight:600">● 주의</span>'
+        return f'<span style="color:#c62828;font-weight:600">● 과다</span>'
+
+    # 개선과제 자동 도출
+    issues_html = ""
+    lab_r = lab_info.get("ratio_to_revenue",0)
+    fix_r = fix_info.get("ratio_to_revenue",0)
+    sup_r = sup_info.get("ratio_to_revenue",0)
+    new_r = out_info.get("new_patient_ratio",0)
+    mgn   = pro_info.get("op_margin",0)
+    issues = []
+    if lab_r > 55:
+        issues.append(("🔴 긴급","인건비 과다",f"인건비율 {lab_r:.1f}% — 업종 권고(55%) 초과","직종별 효율화, 인센티브 구조 조정, 정원 재검토"))
+    if mgn < 8:
+        issues.append(("🔴 긴급","영업이익률 저조",f"영업이익률 {mgn:.1f}% — 업종 평균(8~12%) 하회","수익 구조 전반 재검토 및 비급여 항목 확대"))
+    if fix_r > 22:
+        issues.append(("🟡 주의","고정비 과다",f"고정비율 {fix_r:.1f}% — 권고 수준(20%) 초과","임차료 재협상, 렌탈 재검토, 에너지 절감"))
+    if sup_r > 15:
+        issues.append(("🟡 주의","소모품/약제비 과다",f"소모품·약제비율 {sup_r:.1f}% — 권고(12%) 초과","공동구매, 재고관리 시스템, 처방 패턴 분석"))
+    if new_r < 8:
+        issues.append(("🟡 주의","신환 유입 부족",f"신환 비율 {new_r:.1f}% — 환자 기반 확대 필요","온라인 마케팅 강화, 지역사회 연계"))
+    if not issues:
+        issues.append(("🟢 양호","경영 지표 양호","대부분의 경영 지표가 업종 평균 이상입니다","현재 수준 유지 및 상위 20% 달성 전략 수립"))
+    for pri, title, desc, action in issues:
+        bg = ("#fff0f0" if "긴급" in pri else "#fffbe6" if "주의" in pri else "#f0fff4")
+        bd = ("#ffaaaa" if "긴급" in pri else "#ffe082" if "주의" in pri else "#a5d6a7")
+        issues_html += f"""
+        <tr>
+          <td style="padding:7px 10px;border:1px solid {bd};background:{bg};font-weight:600">{pri}</td>
+          <td style="padding:7px 10px;border:1px solid {bd};background:{bg};font-weight:600">{title}</td>
+          <td style="padding:7px 10px;border:1px solid {bd};background:{bg}">{desc}</td>
+          <td style="padding:7px 10px;border:1px solid {bd};background:{bg};color:#1565c0">{action}</td>
+        </tr>"""
+
+    # 주상병 목록
+    out_df = data.get("원무", pd.DataFrame())
+    disease_html = ""
+    if not out_df.empty and "주상병1" in out_df.columns:
+        dc = out_df["주상병1"].value_counts()
+        for d, cnt in dc.items():
+            disease_html += f"<li>{d} ({cnt}개월)</li>"
+
+    html = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>병원 경영진단 보고서 — {hospital_name}</title>
+<style>
+  @page {{ size: A4; margin: 18mm 16mm; }}
+  * {{ box-sizing: border-box; margin:0; padding:0; font-family:'맑은 고딕','Malgun Gothic','Apple SD Gothic Neo',sans-serif; }}
+  body {{ background:#fff; color:#222; font-size:10pt; line-height:1.6; }}
+
+  /* ── 표지 헤더 ── */
+  .cover {{
+    background: linear-gradient(135deg,#1a237e 0%,#1565c0 60%,#42a5f5 100%);
+    color:#fff; padding:28px 30px 22px; border-radius:6px; margin-bottom:18px;
+  }}
+  .cover h1 {{ font-size:20pt; font-weight:700; letter-spacing:-0.5px; }}
+  .cover .sub {{ font-size:10pt; opacity:.85; margin-top:6px; }}
+  .cover .meta {{ margin-top:14px; font-size:9pt; opacity:.8; border-top:1px solid rgba(255,255,255,.3); padding-top:10px; }}
+
+  /* ── 섹션 제목 ── */
+  .sec-title {{
+    font-size:12pt; font-weight:700; color:#1a237e;
+    border-left:4px solid #1565c0; padding:4px 10px;
+    background:#e3f2fd; margin:20px 0 10px; border-radius:0 4px 4px 0;
+  }}
+
+  /* ── 종합 점수 박스 ── */
+  .score-box {{
+    display:flex; gap:14px; margin-bottom:16px; flex-wrap:wrap;
+  }}
+  .score-card {{
+    flex:1; min-width:100px; background:#f8f9ff;
+    border:1px solid #c5cae9; border-radius:6px;
+    padding:10px 12px; text-align:center;
+  }}
+  .score-card .val {{ font-size:16pt; font-weight:700; color:#1565c0; }}
+  .score-card .lbl {{ font-size:8pt; color:#555; margin-top:2px; }}
+
+  .total-score {{
+    text-align:center; padding:14px; background:#1565c0;
+    border-radius:8px; color:#fff; margin-bottom:16px;
+  }}
+  .total-score .num {{ font-size:28pt; font-weight:700; }}
+  .total-score .lbl {{ font-size:9pt; opacity:.85; }}
+
+  /* ── 테이블 공통 ── */
+  table {{ width:100%; border-collapse:collapse; font-size:9.5pt; margin-bottom:12px; }}
+  th {{
+    background:#1565c0; color:#fff; padding:6px 9px;
+    text-align:center; font-weight:600;
+  }}
+  td {{ padding:6px 9px; border:1px solid #dde; }}
+  tr:nth-child(even) td {{ background:#f5f7ff; }}
+  .num-cell {{ text-align:right; font-family:Consolas,monospace; }}
+  .center {{ text-align:center; }}
+
+  /* ── 손익표 ── */
+  .pnl-plus  {{ color:#1a237e; font-weight:600; }}
+  .pnl-minus {{ color:#c62828; }}
+  .pnl-total {{ background:#e8f5e9 !important; font-weight:700; }}
+
+  /* ── 구분선 ── */
+  hr {{ border:none; border-top:1px solid #ccc; margin:14px 0; }}
+
+  /* ── 로드맵 ── */
+  .roadmap-bar {{
+    display:flex; align-items:stretch; gap:0; margin-bottom:6px;
+  }}
+  .rm-period {{
+    background:#1565c0; color:#fff; font-weight:600;
+    padding:6px 10px; font-size:8.5pt; min-width:90px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:4px 0 0 4px;
+  }}
+  .rm-body {{
+    border:1px solid #c5cae9; border-left:none;
+    padding:6px 10px; flex:1; font-size:9pt;
+    border-radius:0 4px 4px 0; background:#f8f9ff;
+  }}
+  .rm-body b {{ color:#1a237e; }}
+
+  /* ── 푸터 ── */
+  .footer {{
+    margin-top:24px; padding-top:10px; border-top:1px solid #ccc;
+    font-size:7.5pt; color:#888; text-align:center;
+  }}
+
+  /* 인쇄시 페이지 나누기 방지 */
+  .no-break {{ page-break-inside:avoid; }}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 표지 헤더 ══════════════ -->
+<div class="cover">
+  <h1>🏥 병원 경영진단 보고서</h1>
+  <div class="sub">Hospital Management Diagnosis Report</div>
+  <div class="meta">
+    진단 대상 : {hospital_name} &nbsp;|&nbsp;
+    분석 기간 : 최근 12개월 &nbsp;|&nbsp;
+    작성일 : {now_str}
+  </div>
+</div>
+
+<!-- ══════════════ 1. 종합 경영점수 ══════════════ -->
+<div class="sec-title">1. 종합 경영점수</div>
+<div class="total-score no-break">
+  <div class="num" style="color:#fff">{score:.0f}<span style="font-size:14pt"> / 100점</span></div>
+  <div class="lbl">{"우수" if score>=75 else "양호" if score>=60 else "개선 필요"} &nbsp;{'★★★★★' if score>=80 else '★★★★☆' if score>=65 else '★★★☆☆' if score>=50 else '★★☆☆☆'}</div>
+</div>
+
+<div class="score-box no-break">
+  <div class="score-card">
+    <div class="val">{lab_info.get('score',0):.0f}</div>
+    <div class="lbl">인건비 관리</div>
+  </div>
+  <div class="score-card">
+    <div class="val">{fix_info.get('score',0):.0f}</div>
+    <div class="lbl">고정비 관리</div>
+  </div>
+  <div class="score-card">
+    <div class="val">{sup_info.get('score',0):.0f}</div>
+    <div class="lbl">원가 관리</div>
+  </div>
+  <div class="score-card">
+    <div class="val">{out_info.get('score',0):.0f}</div>
+    <div class="lbl">환자 관리</div>
+  </div>
+  <div class="score-card">
+    <div class="val">{pro_info.get('score',0):.0f}</div>
+    <div class="lbl">수익성</div>
+  </div>
+</div>
+
+<!-- ══════════════ 2. 핵심 경영지표 요약 ══════════════ -->
+<div class="sec-title">2. 핵심 경영지표 요약</div>
+<table class="no-break">
+  <tr><th style="width:12%">구분</th><th style="width:22%">지표</th><th style="width:22%">수치</th><th style="width:12%">평가</th><th>비고</th></tr>
+  <tr>
+    <td class="center" rowspan="3"><b>매출</b></td>
+    <td>연간 총매출</td>
+    <td class="num-cell pnl-plus"><b>{fmt_krw(rev_info.get('total',0))}</b></td>
+    <td class="center">{badge(rev_info.get('growth_rate',0), 5, 0)}</td>
+    <td>전년 대비 {rev_info.get('growth_rate',0):+.1f}%</td>
+  </tr>
+  <tr>
+    <td>월평균 매출</td>
+    <td class="num-cell">{fmt_krw(rev_info.get('monthly_avg',0))}</td>
+    <td class="center">—</td>
+    <td>연간 총매출 ÷ 12개월</td>
+  </tr>
+  <tr>
+    <td>급여 / 비급여 비율</td>
+    <td class="center">{rev_info.get('nhi_ratio',0):.1f}% / {rev_info.get('non_nhi_ratio',0):.1f}%</td>
+    <td class="center">{badge(rev_info.get('non_nhi_ratio',0), 35, 20)}</td>
+    <td>비급여 비중 확대 권고</td>
+  </tr>
+  <tr>
+    <td class="center" rowspan="2"><b>인건비</b></td>
+    <td>연간 인건비</td>
+    <td class="num-cell">{fmt_krw(lab_info.get('total',0))}</td>
+    <td class="center">{badge_rev(lab_info.get('ratio_to_revenue',0), 60, 50)}</td>
+    <td>인건비율 {lab_info.get('ratio_to_revenue',0):.1f}%</td>
+  </tr>
+  <tr>
+    <td>월평균 인건비</td>
+    <td class="num-cell">{fmt_krw(lab_info.get('monthly_avg',0))}</td>
+    <td class="center">—</td>
+    <td>4대보험·퇴직충당금 포함</td>
+  </tr>
+  <tr>
+    <td class="center"><b>고정비</b></td>
+    <td>연간 고정비</td>
+    <td class="num-cell">{fmt_krw(fix_info.get('total',0))}</td>
+    <td class="center">{badge_rev(fix_info.get('ratio_to_revenue',0), 25, 20)}</td>
+    <td>고정비율 {fix_info.get('ratio_to_revenue',0):.1f}%</td>
+  </tr>
+  <tr>
+    <td class="center"><b>소모품/약제</b></td>
+    <td>연간 소모품·약제비</td>
+    <td class="num-cell">{fmt_krw(sup_info.get('total',0))}</td>
+    <td class="center">{badge_rev(sup_info.get('ratio_to_revenue',0), 18, 12)}</td>
+    <td>원가율 {sup_info.get('ratio_to_revenue',0):.1f}%</td>
+  </tr>
+  <tr>
+    <td class="center" rowspan="2"><b>수익성</b></td>
+    <td>영업이익</td>
+    <td class="num-cell {'pnl-plus' if pro_info.get('op_profit',0)>=0 else 'pnl-minus'}"><b>{fmt_krw(pro_info.get('op_profit',0))}</b></td>
+    <td class="center">{badge(pro_info.get('op_margin',0), 15, 8)}</td>
+    <td>영업이익률 {pro_info.get('op_margin',0):.1f}%</td>
+  </tr>
+  <tr>
+    <td>총비용</td>
+    <td class="num-cell pnl-minus">{fmt_krw(pro_info.get('total_cost',0))}</td>
+    <td class="center">—</td>
+    <td>인건비+고정비+원가+마케팅</td>
+  </tr>
+  <tr>
+    <td class="center" rowspan="2"><b>원무</b></td>
+    <td>연간 총 내원환자</td>
+    <td class="num-cell">{out_info.get('total_patients',0):,}명</td>
+    <td class="center">—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>신환(초진) 비율</td>
+    <td class="center">{out_info.get('new_patient_ratio',0):.1f}%</td>
+    <td class="center">{badge(out_info.get('new_patient_ratio',0), 12, 7)}</td>
+    <td>월평균 초진 {out_info.get('monthly_new',0):.0f}명</td>
+  </tr>
+</table>
+
+<!-- ══════════════ 3. 손익 구조 ══════════════ -->
+<div class="sec-title">3. 손익 구조 (연간)</div>
+<table class="no-break">
+  <tr><th style="width:35%">항목</th><th style="width:30%">금액 (원)</th><th style="width:15%">비율</th><th>평가 기준</th></tr>
+  <tr>
+    <td><b>📈 의료수익 (매출)</b></td>
+    <td class="num-cell pnl-plus"><b>{fmt_krw(rev_info.get('total',0))}</b></td>
+    <td class="center">100.0%</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;└ 인건비</td>
+    <td class="num-cell pnl-minus">({fmt_krw(lab_info.get('total',0))})</td>
+    <td class="center">({lab_info.get('ratio_to_revenue',0):.1f}%)</td>
+    <td>권고: 45~55%</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;└ 고정비</td>
+    <td class="num-cell pnl-minus">({fmt_krw(fix_info.get('total',0))})</td>
+    <td class="center">({fix_info.get('ratio_to_revenue',0):.1f}%)</td>
+    <td>권고: 15~20%</td>
+  </tr>
+  <tr>
+    <td>&nbsp;&nbsp;└ 소모품·약제비</td>
+    <td class="num-cell pnl-minus">({fmt_krw(sup_info.get('total',0))})</td>
+    <td class="center">({sup_info.get('ratio_to_revenue',0):.1f}%)</td>
+    <td>권고: 10~12%</td>
+  </tr>
+  <tr class="pnl-total">
+    <td><b>💰 영업이익</b></td>
+    <td class="num-cell {'pnl-plus' if pro_info.get('op_profit',0)>=0 else 'pnl-minus'}"><b>{fmt_krw(pro_info.get('op_profit',0))}</b></td>
+    <td class="center"><b>{pro_info.get('op_margin',0):.1f}%</b></td>
+    <td>권고: 10~20%</td>
+  </tr>
+</table>
+
+<!-- ══════════════ 4. 주요 개선 과제 ══════════════ -->
+<div class="sec-title">4. 주요 개선 과제</div>
+<table class="no-break">
+  <tr><th style="width:10%">우선순위</th><th style="width:15%">과제명</th><th style="width:35%">진단 내용</th><th>권고 대응방안</th></tr>
+  {issues_html}
+</table>
+
+<!-- ══════════════ 5. 원무 현황 ══════════════ -->
+<div class="sec-title">5. 원무 현황</div>
+<table class="no-break">
+  <tr><th>구분</th><th>수치</th><th>평가</th></tr>
+  <tr>
+    <td>연간 총 내원환자</td>
+    <td class="num-cell">{out_info.get('total_patients',0):,}명</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>월평균 초진(신환)</td>
+    <td class="num-cell">{out_info.get('monthly_new',0):.0f}명</td>
+    <td class="center">{badge(out_info.get('new_patient_ratio',0), 12, 7)}</td>
+  </tr>
+  <tr>
+    <td>월평균 재진</td>
+    <td class="num-cell">{out_info.get('monthly_revisit',0):.0f}명</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>신환(초진) 비율</td>
+    <td class="center">{out_info.get('new_patient_ratio',0):.1f}%</td>
+    <td class="center">{badge(out_info.get('new_patient_ratio',0), 12, 7)}</td>
+  </tr>
+</table>
+{"<p style='font-size:9pt;margin-top:4px'><b>주요 상병:</b><ul style='margin-left:18px;font-size:9pt'>" + disease_html + "</ul></p>" if disease_html else ""}
+
+<!-- ══════════════ 6. 전략 로드맵 ══════════════ -->
+<div class="sec-title">6. 전략 로드맵</div>
+<div class="no-break">
+  <div class="roadmap-bar">
+    <div class="rm-period">즉시~1개월</div>
+    <div class="rm-body"><b>비용 현황 정밀 진단</b> — 인건비 항목별 분석, 불필요 고정비 파악, 약제·소모품 재고 실사</div>
+  </div>
+  <div class="roadmap-bar">
+    <div class="rm-period" style="background:#1976d2">1~3개월</div>
+    <div class="rm-body"><b>비용 구조 최적화</b> — 임차료·렌탈 재협상, 공동구매 네트워크 참여, 인센티브 구조 재설계</div>
+  </div>
+  <div class="roadmap-bar">
+    <div class="rm-period" style="background:#1e88e5">3~6개월</div>
+    <div class="rm-body"><b>수익 다각화</b> — 비급여 항목 발굴·확대, 건강검진 패키지 개발, 지역사회 협력 강화</div>
+  </div>
+  <div class="roadmap-bar">
+    <div class="rm-period" style="background:#42a5f5">6~12개월</div>
+    <div class="rm-body"><b>환자 기반 확대</b> — 디지털 마케팅 체계화, 환자 만족도 관리, 예약·수납 시스템 개선</div>
+  </div>
+  <div class="roadmap-bar">
+    <div class="rm-period" style="background:#90caf9;color:#1a237e">1~3년</div>
+    <div class="rm-body"><b>지속 성장 기반 구축</b> — EMR 데이터 기반 경영, 의료진 역량 강화, 브랜드 포지셔닝 확립 → 영업이익률 15% 달성</div>
+  </div>
+</div>
+
+<hr>
+<div class="footer">
+  본 보고서는 {hospital_name} 의뢰에 의해 작성된 경영진단 자료입니다. &nbsp;|&nbsp;
+  작성일: {now_str} &nbsp;|&nbsp;
+  본 진단 결과는 참고용이며 최종 경영 결정은 전문 컨설턴트와 상담하시기 바랍니다.
+</div>
+</body>
+</html>"""
+    return html
+
 def calc_score(ratio, thresholds):
     """thresholds: [(upper_bound, score), ...] 오름차순"""
     for ub, sc in thresholds:
@@ -246,29 +627,28 @@ def make_sample_data():
         "의료소모품": np.random.randint(1500000, 2500000, 12),
         "약제비": np.random.randint(2000000, 3500000, 12),
         "장비구입비": np.random.randint(0, 5000000, 12),
-        "위생소모품": np.random.randint(200000, 500000, 12),
+        "기타소모품": np.random.randint(200000, 500000, 12),
     })
 
-    # 4. 월간 매출
+    # 4. 월간 매출  ※ 수납건수·1인당평균처방금액 삭제
     revenue = pd.DataFrame({
         "월": months,
         "급여매출": np.random.randint(25000000, 40000000, 12),
         "비급여매출": np.random.randint(8000000, 18000000, 12),
-        "수납건수": np.random.randint(800, 1200, 12),
     })
     revenue["총매출"] = revenue["급여매출"] + revenue["비급여매출"]
-    revenue["1인당평균처방금액"] = (revenue["총매출"] / revenue["수납건수"]).astype(int)
 
-    # 5. 원무
+    # 5. 원무  ※ 총내원횟수→초재진수 분리, 1인당평균내원횟수·주상병2 삭제
+    _new_pt   = np.random.randint(60, 120, 12)
+    _total_pt = np.random.randint(700, 1100, 12)
+    _total_pt = np.maximum(_total_pt, _new_pt + 1)
     outpatient = pd.DataFrame({
         "월": months,
-        "신환수": np.random.randint(60, 120, 12),
-        "총내원환자수": np.random.randint(700, 1100, 12),
-        "총내원횟수": np.random.randint(900, 1500, 12),
+        "신환수(초진)": _new_pt,
+        "재진수": _total_pt - _new_pt,
+        "총내원환자수": _total_pt,
+        "주상병1": ["상세불명의 고혈압"]*4 + ["2형 당뇨병"]*4 + ["급성기관지염"]*4,
     })
-    outpatient["1인당평균내원횟수"] = (outpatient["총내원횟수"] / outpatient["총내원환자수"]).round(2)
-    outpatient["주상병1"] = ["상세불명의 고혈압"]*4 + ["2형 당뇨병"]*4 + ["급성기관지염"]*4
-    outpatient["주상병2"] = ["고지혈증"]*6 + ["요통"]*6
 
     # 6. 직원 현황
     staff = pd.DataFrame({
@@ -277,13 +657,11 @@ def make_sample_data():
         "평균급여(세전)": [8000000, 3500000, 2800000, 2600000, 3000000, 3200000],
     })
 
-    # 7. 마케팅/홍보비
+    # 7. 마케팅/홍보비  ※ SNS운영비·이벤트비용 삭제
     marketing = pd.DataFrame({
         "월": months,
         "온라인광고비": np.random.randint(300000, 800000, 12),
         "오프라인광고비": np.random.randint(0, 300000, 12),
-        "SNS운영비": np.random.randint(100000, 300000, 12),
-        "이벤트비용": np.random.randint(0, 500000, 12),
     })
 
     # 8. 재무 요약
@@ -320,10 +698,9 @@ def run_analysis(data):
                 "total": total_rev, "monthly_avg": avg_rev,
                 "growth_rate": rev_growth, "nhi_ratio": nhi_ratio,
                 "non_nhi_ratio": 100 - nhi_ratio,
-                "avg_prescription": rev["1인당평균처방금액"].mean() if "1인당평균처방금액" in rev.columns else 0,
             }
         else:
-            results["revenue"] = {"total":0,"monthly_avg":0,"growth_rate":0,"nhi_ratio":0,"non_nhi_ratio":0,"avg_prescription":0}
+            results["revenue"] = {"total":0,"monthly_avg":0,"growth_rate":0,"nhi_ratio":0,"non_nhi_ratio":0}
 
         # ── 인건비 분석 ────────────────────────────────────────────────────
         if not lab.empty:
@@ -375,19 +752,19 @@ def run_analysis(data):
 
         # ── 원무 분석 ─────────────────────────────────────────────────────
         if not out.empty:
-            new_pt_ratio = (out["신환수"].sum() / out["총내원환자수"].sum() * 100
-                            if "신환수" in out.columns and "총내원환자수" in out.columns else 0)
-            avg_visits   = out["1인당평균내원횟수"].mean() if "1인당평균내원횟수" in out.columns else 0
+            _new_col = "신환수(초진)" if "신환수(초진)" in out.columns else "신환수"
+            new_pt_ratio = (out[_new_col].sum() / out["총내원환자수"].sum() * 100
+                            if _new_col in out.columns and "총내원환자수" in out.columns else 0)
             results["outpatient"] = {
                 "total_patients": out["총내원환자수"].sum() if "총내원환자수" in out.columns else 0,
                 "new_patient_ratio": new_pt_ratio,
-                "avg_visits": avg_visits,
-                "monthly_new": out["신환수"].mean() if "신환수" in out.columns else 0,
+                "monthly_new": out[_new_col].mean() if _new_col in out.columns else 0,
+                "monthly_revisit": out["재진수"].mean() if "재진수" in out.columns else 0,
                 "score": calc_score(new_pt_ratio,
                     [(5,50),(10,70),(15,85),(25,100),(200,90)])
             }
         else:
-            results["outpatient"] = {"total_patients":0,"new_patient_ratio":0,"avg_visits":0,"monthly_new":0,"score":50}
+            results["outpatient"] = {"total_patients":0,"new_patient_ratio":0,"monthly_new":0,"monthly_revisit":0,"score":50}
 
         # ── 마케팅 비용 ───────────────────────────────────────────────────
         if not mkt.empty:
@@ -696,10 +1073,10 @@ if not st.session_state.get("analysis_done"):
     | 인건비 | 월, 기본급합계(세전), 4대보험(사용자부담), 근로소득세, 인센티브, 퇴직충당금 | 월별 인건비 내역 |
     | 고정비 | 월, 임차료, 렌탈료, 유지보수비, 전기료, 수도료, 통신비 | 월별 고정비 내역 |
     | 소모품약제 | 월, 의료소모품, 약제비, 장비구입비 | 월별 구매비용 |
-    | 매출 | 월, 급여매출, 비급여매출, 수납건수 | 월별 매출 내역 |
+    | 매출 | 월, 급여매출, 비급여매출, 총매출 | 월별 매출 내역 |
     | 원무 | 월, 신환수, 총내원환자수, 총내원횟수, 주상병1 | 월별 원무 현황 |
     | 직원현황 | 직종, 인원수, 평균급여(세전) | 직원 구성 현황 |
-    | 마케팅 | 월, 온라인광고비, 오프라인광고비, SNS운영비 | 마케팅 비용 |
+    | 마케팅 | 월, 온라인광고비, 오프라인광고비 | 마케팅 비용 |
     """)
 
     st.info("👈 좌측 사이드바에서 '샘플 데이터 사용'을 선택하고 **분석 실행** 버튼을 눌러주세요.")
@@ -844,14 +1221,13 @@ with tabs[1]:
     if rev_df.empty:
         st.warning("매출 데이터가 없습니다.")
     else:
-        c1,c2,c3,c4 = st.columns(4)
+        c1,c2,c3 = st.columns(3)
         c1.metric("연간 총매출", fmt_krw(rev_df["총매출"].sum()) if "총매출" in rev_df.columns else "-")
         c2.metric("월평균 매출", fmt_krw(rev_df["총매출"].mean()) if "총매출" in rev_df.columns else "-")
         c3.metric("최고 매출월", rev_df.loc[rev_df["총매출"].idxmax(),"월"] if "총매출" in rev_df.columns else "-")
-        c4.metric("1인당 평균처방", fmt_krw(rev_df["1인당평균처방금액"].mean()) if "1인당평균처방금액" in rev_df.columns else "-")
 
         st.markdown("#### 매출 상세 데이터")
-        st.dataframe(apply_accounting_format(rev_df, exclude_cols=["월","수납건수"]),
+        st.dataframe(apply_accounting_format(rev_df, exclude_cols=["월"]),
                      use_container_width=True, hide_index=True)
 
         if "급여매출" in rev_df.columns and "비급여매출" in rev_df.columns:
@@ -883,31 +1259,17 @@ with tabs[1]:
                 fig2.update_layout(title="급여/비급여 비율", height=300)
                 st.plotly_chart(fig2, use_container_width=True)
 
-        if "1인당평균처방금액" in rev_df.columns:
-            avg_pres = rev_df["1인당평균처방금액"].mean()
-            fig3 = go.Figure(go.Bar(
-                x=rev_df["월"], y=rev_df["1인당평균처방금액"],
-                marker_color=rev_df["1인당평균처방금액"],
-                marker_colorscale="Blues",
-                hovertemplate="<b>%{x}</b><br>1인당 처방금액: %{customdata}<extra></extra>",
-                customdata=[fmt_krw(v) for v in rev_df["1인당평균처방금액"]]))
-            fig3.add_hline(y=avg_pres, line_dash="dash", line_color="red",
-                           annotation_text=f"평균: {fmt_krw(avg_pres)}")
-            fig3.update_layout(title="1인당 평균 처방금액 추이", height=280,
-                               yaxis=dict(tickformat=",.0f"))
-            st.plotly_chart(fig3, use_container_width=True)
+
 
         if plan in ("pro", "premium"):
             st.markdown('<div class="section-header">📊 업종 벤치마크 비교 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
             avg_rev = rev_df["총매출"].mean() if "총매출" in rev_df.columns else 0
-            avg_pres_val = rev_df["1인당평균처방금액"].mean() if "1인당평균처방금액" in rev_df.columns else 0
             bench = {
-                "지표": ["월평균 매출","1인당 처방금액","비급여 비율"],
+                "지표": ["월평균 매출","비급여 비율"],
                 "본원": [fmt_krw(avg_rev),
-                         fmt_krw(avg_pres_val),
                          f"{analysis['revenue']['non_nhi_ratio']:.1f}%"],
-                "업종 평균": [fmt_krw(32000000), fmt_krw(42000), "28.0%"],
-                "상위 20%":  [fmt_krw(55000000), fmt_krw(62000), "45.0%"],
+                "업종 평균": [fmt_krw(32000000), "28.0%"],
+                "상위 20%":  [fmt_krw(55000000), "45.0%"],
             }
             st.dataframe(pd.DataFrame(bench), use_container_width=True, hide_index=True)
         else:
@@ -1107,43 +1469,50 @@ with tabs[4]:
         st.warning("원무 데이터가 없습니다.")
     else:
         out_info = analysis.get("outpatient",{})
-        c1,c2,c3,c4 = st.columns(4)
+        _new_col = "신환수(초진)" if "신환수(초진)" in out_df.columns else "신환수"
+        c1,c2,c3 = st.columns(3)
         c1.metric("연간 총 내원환자", f"{out_info.get('total_patients',0):,}명")
-        c2.metric("월평균 신환", f"{out_info.get('monthly_new',0):.0f}명")
-        c3.metric("신환 비율", f"{out_info.get('new_patient_ratio',0):.1f}%")
-        c4.metric("1인당 평균내원횟수", f"{out_info.get('avg_visits',0):.2f}회")
+        c2.metric("월평균 초진(신환)", f"{out_info.get('monthly_new',0):.0f}명")
+        c3.metric("신환(초진) 비율", f"{out_info.get('new_patient_ratio',0):.1f}%")
 
         st.dataframe(out_df, use_container_width=True, hide_index=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            if "총내원환자수" in out_df.columns and "신환수" in out_df.columns:
-                out_df["재진수"] = out_df["총내원환자수"] - out_df["신환수"]
-                fig = px.bar(out_df, x="월", y=["신환수","재진수"],
-                             barmode="stack", title="신환/재진 구성",
-                             color_discrete_map={"신환수":"#1565c0","재진수":"#90caf9"})
-                fig.update_layout(height=300, legend=dict(orientation="h",y=-0.2))
+            if "총내원환자수" in out_df.columns and _new_col in out_df.columns:
+                _revisit = "재진수" if "재진수" in out_df.columns else "재진"
+                if _revisit not in out_df.columns:
+                    out_df[_revisit] = out_df["총내원환자수"] - out_df[_new_col]
+                fig = go.Figure()
+                fig.add_bar(x=out_df["월"], y=out_df[_new_col],
+                            name="초진(신환)", marker_color="#1565c0",
+                            hovertemplate="<b>%{x}</b><br>초진: %{y:,}명<extra></extra>")
+                fig.add_bar(x=out_df["월"], y=out_df[_revisit],
+                            name="재진", marker_color="#90caf9",
+                            hovertemplate="<b>%{x}</b><br>재진: %{y:,}명<extra></extra>")
+                fig.update_layout(barmode="stack", title="초진/재진 구성",
+                                  height=300, legend=dict(orientation="h",y=-0.2))
                 st.plotly_chart(fig, use_container_width=True)
         with col2:
-            if "1인당평균내원횟수" in out_df.columns:
-                fig2 = px.line(out_df, x="월", y="1인당평균내원횟수",
-                               title="1인당 평균 내원횟수 추이", markers=True)
-                fig2.add_hline(y=out_df["1인당평균내원횟수"].mean(),
-                               line_dash="dash", line_color="red",
-                               annotation_text="평균")
-                fig2.update_layout(height=300)
+            # 월별 신환 추이 라인
+            if _new_col in out_df.columns:
+                avg_new = out_df[_new_col].mean()
+                fig2 = go.Figure()
+                fig2.add_scatter(x=out_df["월"], y=out_df[_new_col],
+                                 mode="lines+markers", name="초진(신환)",
+                                 line=dict(color="#1565c0", width=2),
+                                 hovertemplate="<b>%{x}</b><br>초진: %{y:,}명<extra></extra>")
+                fig2.add_hline(y=avg_new, line_dash="dash", line_color="red",
+                               annotation_text=f"평균 {avg_new:.0f}명")
+                fig2.update_layout(title="월별 초진(신환) 추이", height=300)
                 st.plotly_chart(fig2, use_container_width=True)
 
         # 주상병 현황
         if "주상병1" in out_df.columns:
-            st.markdown("#### 주요 상병 현황")
+            st.markdown("#### 주요 상병 현황 (주상병1 기준)")
             disease_count = out_df["주상병1"].value_counts().reset_index()
             disease_count.columns = ["상병명","월수"]
-            if "주상병2" in out_df.columns:
-                d2 = out_df["주상병2"].value_counts().reset_index()
-                d2.columns = ["상병명","월수"]
-                disease_count = pd.concat([disease_count, d2]).groupby("상병명").sum().reset_index()
-            fig3 = px.bar(disease_count.sort_values("월수",ascending=True),
+            fig3 = px.bar(disease_count.sort_values("월수", ascending=True),
                           x="월수", y="상병명", orientation="h",
                           title="주요 상병 빈도", color="월수",
                           color_continuous_scale="Blues")
@@ -1385,12 +1754,6 @@ with tabs[7]:
       <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(rev_info.get('monthly_avg',0))}</td>
       <td style="padding:6px;border:1px solid #eee">—</td>
     </tr>
-    <tr style="background:#f5f5f5">
-      <td style="padding:6px;border:1px solid #eee">매출</td>
-      <td style="padding:6px;border:1px solid #eee">1인당 평균처방금액</td>
-      <td style="padding:6px;border:1px solid #eee;text-align:right;font-family:monospace">{fmt_krw(rev_info.get('avg_prescription',0))}</td>
-      <td style="padding:6px;border:1px solid #eee">—</td>
-    </tr>
     <tr>
       <td style="padding:6px;border:1px solid #eee">인건비</td>
       <td style="padding:6px;border:1px solid #eee">연간 인건비</td>
@@ -1505,13 +1868,24 @@ with tabs[7]:
         </div>
         """, unsafe_allow_html=True)
 
-        # PDF 다운로드 (Premium)
-        if plan == "premium":
-            st.markdown('<div class="section-header">📄 보고서 출력 <span class="premium-badge">PREMIUM</span></div>', unsafe_allow_html=True)
-            if st.button("📥 PDF 보고서 생성 (준비 중)", disabled=True):
-                pass
-            st.caption("PDF 출력 기능은 추후 업데이트 예정입니다. 현재는 브라우저 인쇄 기능(Ctrl+P)을 이용해 주세요.")
+        # 보고서 출력 (Pro 이상)
+        st.markdown('<div class="section-header">📄 보고서 출력</div>', unsafe_allow_html=True)
 
+        # ── HTML 보고서 다운로드 ─────────────────────────────────────────
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            html_report = build_html_report(
+                st.session_state.hospital_name, analysis, data, now)
+            st.download_button(
+                label="📄 A4 HTML 보고서 다운로드",
+                data=html_report.encode("utf-8"),
+                file_name=f"경영진단보고서_{st.session_state.hospital_name}_{datetime.now().strftime('%Y%m%d')}.html",
+                mime="text/html",
+                use_container_width=True,
+                type="primary"
+            )
+            st.caption("💡 다운로드 후 브라우저에서 열고 Ctrl+P → PDF로 저장하면 A4 PDF 출력이 가능합니다.")
+        with col_dl2:
             # Excel 다운로드
             buf = io.BytesIO()
             with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -1533,7 +1907,8 @@ with tabs[7]:
                 label="📊 Excel 분석 데이터 다운로드",
                 data=buf.getvalue(),
                 file_name=f"병원경영진단_{st.session_state.hospital_name}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
     else:
         st.markdown('<div class="lock-overlay">🔒 전략 로드맵 및 보고서 출력은 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
