@@ -12,103 +12,160 @@ import hashlib
 
 # ── 페이지 설정 ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="병원 경영진단 시스템",
+    page_title="병원 경영진단 시스템 | MEDIUM",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ── CSS 스타일 ───────────────────────────────────────────────────────────────
+# ── CSS 스타일 (MEDIUM 다크그린 테마) ───────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
-    
-    * { font-family: 'Noto Sans KR', sans-serif; }
-    
-    .main-header {
-        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #1565c0 100%);
-        padding: 2rem; border-radius: 12px; color: white; text-align: center;
-        margin-bottom: 2rem; box-shadow: 0 4px 20px rgba(26,35,126,0.4);
-    }
-    .main-header h1 { font-size: 2.2rem; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
-    .main-header p  { font-size: 1rem; opacity: 0.85; margin: 0.5rem 0 0; }
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
 
+    /* ── 전역 폰트·배경 ── */
+    * { font-family: 'Noto Sans KR', sans-serif; }
+    .stApp { background-color: #f4f6f4; }
+
+    /* ── 사이드바 ── */
+    [data-testid="stSidebar"] {
+        background: #1a2e1a !important;
+        border-right: 1px solid #2d4a2d;
+    }
+    [data-testid="stSidebar"] * { color: #d4e8d4 !important; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4 { color: #a8d5a8 !important; }
+    [data-testid="stSidebar"] .stButton > button {
+        background: #2d6a2d !important; color: #fff !important;
+        border: none !important; font-weight: 600;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: #1f4f1f !important;
+    }
+    [data-testid="stSidebar"] input,
+    [data-testid="stSidebar"] select,
+    [data-testid="stSidebar"] textarea {
+        background: #243824 !important; color: #d4e8d4 !important;
+        border: 1px solid #3a5a3a !important;
+    }
+    [data-testid="stSidebar"] label { color: #a8d5a8 !important; }
+    [data-testid="stSidebar"] .stSelectbox > div { background:#243824 !important; }
+
+    /* ── 메인 헤더 ── */
+    .main-header {
+        background: linear-gradient(135deg, #1a3a1a 0%, #2d6a2d 55%, #3d8b3d 100%);
+        padding: 1.8rem 2.5rem; border-radius: 10px; color: white;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 24px rgba(30,80,30,0.35);
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 1rem;
+    }
+    .main-header-left h1 {
+        font-size: 1.8rem; font-weight: 700; margin: 0; letter-spacing: -0.5px;
+    }
+    .main-header-left .sub {
+        font-size: 0.88rem; opacity: 0.8; margin-top: 4px;
+    }
+    .main-header-right {
+        text-align: right; font-size: 0.8rem; opacity: 0.75; line-height: 1.6;
+    }
+    .main-header-right .brand { font-size:1rem; font-weight:700; opacity:1; }
+
+    /* ── 섹션 헤더 ── */
+    .section-header {
+        background: linear-gradient(90deg, #e8f5e8, #f4f6f4);
+        border-left: 4px solid #2d6a2d; padding: 0.7rem 1.2rem;
+        border-radius: 0 8px 8px 0; margin: 1.5rem 0 1rem;
+        font-weight: 600; font-size: 1.05rem; color: #1a3a1a;
+    }
+
+    /* ── 플랜 배지 ── */
+    .pro-badge     { background:#e8f5e8; color:#1a5c1a; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; border:1px solid #2d6a2d; }
+    .premium-badge { background:#fff8e1; color:#795500; padding:2px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; border:1px solid #f9a825; }
+
+
+    /* ── 카드류 ── */
     .metric-card {
         background: white; border-radius: 10px; padding: 1.2rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-left: 4px solid #1565c0;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07); border-left: 4px solid #2d6a2d;
         margin-bottom: 1rem;
     }
     .metric-card.danger  { border-left-color: #c62828; }
-    .metric-card.warning { border-left-color: #f57f17; }
-    .metric-card.success { border-left-color: #2e7d32; }
+    .metric-card.warning { border-left-color: #e65100; }
+    .metric-card.success { border-left-color: #2d6a2d; }
 
-    .section-header {
-        background: linear-gradient(90deg, #e3f2fd, #ffffff);
-        border-left: 4px solid #1565c0; padding: 0.8rem 1.2rem;
-        border-radius: 0 8px 8px 0; margin: 1.5rem 0 1rem; font-weight: 600;
-        font-size: 1.1rem; color: #1a237e;
-    }
-
-    .free-badge  { background:#e8f5e9; color:#2e7d32; padding:2px 10px; border-radius:20px; font-size:0.75rem; font-weight:600; }
-    .pro-badge   { background:#fff3e0; color:#e65100; padding:2px 10px; border-radius:20px; font-size:0.75rem; font-weight:600; }
-    .premium-badge { background:#fce4ec; color:#880e4f; padding:2px 10px; border-radius:20px; font-size:0.75rem; font-weight:600; }
-
+    /* ── 보고서/AI 박스 ── */
     .report-box {
-        background: #f8f9ff; border: 1px solid #c5cae9; border-radius: 10px;
+        background: #fff; border: 1px solid #c8ddc8; border-radius: 10px;
         padding: 1.5rem; margin: 1rem 0; line-height: 1.8;
     }
     .ai-response {
-        background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px;
+        background: #f9fbf9; border: 1px solid #b2d4b2; border-radius: 10px;
         padding: 1.5rem; margin: 1rem 0; line-height: 1.8;
     }
-    .warning-box {
-        background: #fff3e0; border: 1px solid #ffb74d; border-radius: 8px;
-        padding: 1rem; margin: 0.5rem 0;
-    }
-    .danger-box {
-        background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px;
-        padding: 1rem; margin: 0.5rem 0;
-    }
-    .success-box {
-        background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px;
-        padding: 1rem; margin: 0.5rem 0;
-    }
     .lock-overlay {
-        background: rgba(0,0,0,0.05); border: 2px dashed #bbb;
-        border-radius: 10px; padding: 2rem; text-align: center;
-        color: #888; margin: 1rem 0;
+        background: rgba(45,106,45,0.04); border: 2px dashed #7aab7a;
+        border-radius: 10px; padding: 2.5rem; text-align: center;
+        color: #4a7a4a; margin: 1rem 0;
     }
-    .stTabs [data-baseweb="tab"] { font-size: 0.95rem; font-weight: 500; }
-    .stTabs [aria-selected="true"] { color: #1565c0 !important; }
-    .dataframe { font-size: 0.88rem !important; }
-    
-    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; margin:1rem 0; }
-    .kpi-item { background:white; border-radius:8px; padding:1rem; text-align:center;
-                box-shadow:0 1px 6px rgba(0,0,0,0.07); }
-    .kpi-value { font-size:1.6rem; font-weight:700; color:#1565c0; }
+
+    /* ── 탭 ── */
+    .stTabs [data-baseweb="tab"] { font-size: 0.92rem; font-weight: 500; }
+    .stTabs [aria-selected="true"] { color: #2d6a2d !important; border-bottom-color: #2d6a2d !important; }
+
+    /* ── KPI 공통 ── */
+    .kpi-value { font-size:1.6rem; font-weight:700; color:#2d6a2d; }
     .kpi-label { font-size:0.8rem; color:#666; margin-top:4px; }
-    .kpi-delta { font-size:0.85rem; margin-top:2px; }
-    .delta-pos { color:#2e7d32; } .delta-neg { color:#c62828; }
+    .delta-pos { color:#2d6a2d; } .delta-neg { color:#c62828; }
 
-    /* 회계서식 숫자 공통 */
-    .acct-num {
-        font-family: 'Consolas', 'D2Coding', monospace;
-        text-align: right; letter-spacing: 0.02em;
+    /* ── 회계서식 ── */
+    .acct-num  { font-family:'Consolas','D2Coding',monospace; text-align:right; }
+    .acct-neg  { color:#c62828; }
+    .acct-pos  { color:#1a3a1a; }
+
+    /* ── DataFrame ── */
+    .dataframe { font-size:0.88rem !important; }
+    [data-testid="stDataFrame"] td { text-align:right !important; }
+    [data-testid="stDataFrame"] td:first-child { text-align:left !important; }
+
+    /* ── Streamlit metric 값 색상 ── */
+    [data-testid="stMetricValue"] { color: #1a3a1a !important; }
+    [data-testid="stMetricDelta"] svg { display:none; }
+
+    /* ── 버튼 ── */
+    .stButton > button {
+        background: #2d6a2d !important; color: white !important;
+        border: none !important; border-radius: 6px !important;
+        font-weight: 600 !important;
     }
-    .acct-neg { color: #c62828; }   /* 음수 = 빨강+괄호 */
-    .acct-pos { color: #1a237e; }   /* 양수 = 네이비 */
-    .acct-zero{ color: #757575; }   /* 영 = 회색 */
+    .stButton > button:hover { background: #1f4f1f !important; }
 
-    /* dataframe 숫자 셀 우측 정렬 강제 */
-    [data-testid="stDataFrame"] td { text-align: right !important; }
-    [data-testid="stDataFrame"] td:first-child { text-align: left !important; }
+    /* ── download button ── */
+    [data-testid="stDownloadButton"] > button {
+        background: #2d6a2d !important; color: white !important;
+        font-weight: 600 !important; border:none !important;
+    }
+    [data-testid="stDownloadButton"] > button:hover { background:#1f4f1f !important; }
+
+    /* ── 저작권 푸터 ── */
+    .medium-footer {
+        background: #1a2e1a; color: #7aab7a;
+        padding: 1.4rem 2rem; border-radius: 8px;
+        text-align: center; margin-top: 2rem;
+        font-size: 0.78rem; line-height: 1.8;
+    }
+    .medium-footer .brand { color: #a8d5a8; font-weight: 700; font-size: 0.88rem; }
+    .medium-footer .copy  { color: #c8e8c8; margin-top: 4px; }
+    .medium-footer .warn  { color: #e57373; font-size: 0.73rem; margin-top: 6px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── 세션 상태 초기화 ─────────────────────────────────────────────────────────
 for key, default in {
     "authenticated": False,
-    "plan": "free",          # free | pro | premium
+    "plan": "pro",           # pro | premium
     "hospital_name": "",
     "data": {},
     "analysis_done": False,
@@ -260,7 +317,7 @@ def build_html_report(hospital_name, analysis, data, now_str):
 
   /* ── 표지 헤더 ── */
   .cover {{
-    background: linear-gradient(135deg,#1a237e 0%,#1565c0 60%,#42a5f5 100%);
+    background: linear-gradient(135deg,#1a3a1a 0%,#2d6a2d 60%,#3d8b3d 100%);
     color:#fff; padding:28px 30px 22px; border-radius:6px; margin-bottom:18px;
   }}
   .cover h1 {{ font-size:20pt; font-weight:700; letter-spacing:-0.5px; }}
@@ -296,7 +353,7 @@ def build_html_report(hospital_name, analysis, data, now_str):
   /* ── 테이블 공통 ── */
   table {{ width:100%; border-collapse:collapse; font-size:9.5pt; margin-bottom:12px; }}
   th {{
-    background:#1565c0; color:#fff; padding:6px 9px;
+    background:#2d6a2d; color:#fff; padding:6px 9px;
     text-align:center; font-weight:600;
   }}
   td {{ padding:6px 9px; border:1px solid #dde; }}
@@ -317,7 +374,7 @@ def build_html_report(hospital_name, analysis, data, now_str):
     display:flex; align-items:stretch; gap:0; margin-bottom:6px;
   }}
   .rm-period {{
-    background:#1565c0; color:#fff; font-weight:600;
+    background:#2d6a2d; color:#fff; font-weight:600;
     padding:6px 10px; font-size:8.5pt; min-width:90px;
     display:flex; align-items:center; justify-content:center;
     border-radius:4px 0 0 4px;
@@ -538,28 +595,32 @@ def build_html_report(hospital_name, analysis, data, now_str):
     <div class="rm-body"><b>비용 현황 정밀 진단</b> — 인건비 항목별 분석, 불필요 고정비 파악, 약제·소모품 재고 실사</div>
   </div>
   <div class="roadmap-bar">
-    <div class="rm-period" style="background:#1976d2">1~3개월</div>
+    <div class="rm-period" style="background:#388e3c">1~3개월</div>
     <div class="rm-body"><b>비용 구조 최적화</b> — 임차료·렌탈 재협상, 공동구매 네트워크 참여, 인센티브 구조 재설계</div>
   </div>
   <div class="roadmap-bar">
-    <div class="rm-period" style="background:#1e88e5">3~6개월</div>
+    <div class="rm-period" style="background:#43a047">3~6개월</div>
     <div class="rm-body"><b>수익 다각화</b> — 비급여 항목 발굴·확대, 건강검진 패키지 개발, 지역사회 협력 강화</div>
   </div>
   <div class="roadmap-bar">
-    <div class="rm-period" style="background:#42a5f5">6~12개월</div>
+    <div class="rm-period" style="background:#66bb6a">6~12개월</div>
     <div class="rm-body"><b>환자 기반 확대</b> — 디지털 마케팅 체계화, 환자 만족도 관리, 예약·수납 시스템 개선</div>
   </div>
   <div class="roadmap-bar">
-    <div class="rm-period" style="background:#90caf9;color:#1a237e">1~3년</div>
+    <div class="rm-period" style="background:#a5d6a7;color:#1a3a1a">1~3년</div>
     <div class="rm-body"><b>지속 성장 기반 구축</b> — EMR 데이터 기반 경영, 의료진 역량 강화, 브랜드 포지셔닝 확립 → 영업이익률 15% 달성</div>
   </div>
 </div>
 
 <hr>
 <div class="footer">
-  본 보고서는 {hospital_name} 의뢰에 의해 작성된 경영진단 자료입니다. &nbsp;|&nbsp;
-  작성일: {now_str} &nbsp;|&nbsp;
-  본 진단 결과는 참고용이며 최종 경영 결정은 전문 컨설턴트와 상담하시기 바랍니다.
+  주식회사 메디엄 &nbsp;|&nbsp; 제작·운영 : 조정윤 &nbsp;|&nbsp; 작성일: {now_str}<br>
+  본 보고서는 {hospital_name} 의뢰에 의해 작성된 경영진단 자료입니다.<br>
+  본 진단 결과는 참고용이며 최종 경영 결정은 전문 컨설턴트와 상담하시기 바랍니다.<br>
+  <span style="color:#c62828;font-size:0.85em">
+  ⚠️ 본 시스템의 모든 저작권은 주식회사 메디엄 조정윤에 있으며,
+  무단 도용 및 배포 시 사전 경고 없이 법적 조치를 취할 수 있습니다.
+  </span>
 </div>
 </body>
 </html>"""
@@ -928,69 +989,59 @@ def build_ai_prompt(hospital_name, analysis, data):
 
 # ── 사이드바 ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🏥 병원 경영진단 시스템")
-    st.markdown("---")
+    # ── 브랜드 로고 영역
+    st.markdown("""
+    <div style="padding:16px 4px 10px;border-bottom:1px solid #2d4a2d;margin-bottom:12px">
+        <div style="font-size:1.15rem;font-weight:700;color:#a8d5a8;letter-spacing:0.5px">MEDIUM</div>
+        <div style="font-size:0.68rem;color:#6a9a6a;margin-top:2px">Medical Premium Consulting</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # 요금제 선택 (실제 서비스에서는 결제 시스템 연동)
-    st.markdown("#### 💳 서비스 플랜")
+    # ── 서비스 플랜 (유료 전용)
+    st.markdown('<div style="font-size:0.78rem;color:#7aab7a;font-weight:600;margin-bottom:6px;letter-spacing:0.5px">▸ 서비스 플랜</div>', unsafe_allow_html=True)
     plan_map = {
-        "🆓 무료 (Free)": "free",
-        "⭐ 프로 (Pro)": "pro",
-        "👑 프리미엄 (Premium)": "premium"
+        "⭐ Pro — 표준 경영진단": "pro",
+        "👑 Premium — AI 통합 심층진단": "premium"
     }
     selected_plan = st.selectbox(
-        "플랜 선택",
+        "플랜",
         list(plan_map.keys()),
-        help="실제 서비스에서는 결제 완료 후 자동 활성화됩니다"
+        label_visibility="collapsed",
+        help="결제 완료 후 플랜이 자동 활성화됩니다"
     )
     st.session_state.plan = plan_map[selected_plan]
-
     plan = st.session_state.plan
-    if plan == "free":
+
+    if plan == "pro":
         st.markdown("""
-        <div style="background:#e8f5e9;padding:10px;border-radius:8px;font-size:0.82rem">
-        ✅ 기본 데이터 입력<br>
-        ✅ 기본 차트/그래프<br>
-        ✅ 표준 경영지표<br>
-        ❌ AI 심층진단<br>
-        ❌ 상세 보고서<br>
-        ❌ 벤치마크 비교<br>
-        ❌ 전략 로드맵
-        </div>""", unsafe_allow_html=True)
-    elif plan == "pro":
-        st.markdown("""
-        <div style="background:#fff3e0;padding:10px;border-radius:8px;font-size:0.82rem">
-        ✅ 무료 기능 전체<br>
-        ✅ Claude AI 진단<br>
-        ✅ GPT-4o 진단<br>
-        ✅ 상세 전문 보고서<br>
-        ✅ 벤치마크 비교<br>
-        ❌ Gemini 진단<br>
-        ❌ AI 통합 종합 의견<br>
-        ❌ 맞춤형 로드맵
+        <div style="background:#1e3a1e;border:1px solid #3a6a3a;padding:10px 12px;border-radius:8px;font-size:0.8rem;margin-bottom:4px">
+        ✅ 전체 경영지표 대시보드<br>
+        ✅ 매출 · 비용 심층 분석<br>
+        ✅ Claude + GPT-4o AI 진단<br>
+        ✅ 벤치마크 비교 분석<br>
+        ✅ 수익 개선 시뮬레이션<br>
+        ✅ 전략 로드맵 · HTML 보고서<br>
+        <span style="color:#8aaa8a">— Gemini · AI 통합의견 제외</span>
         </div>""", unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div style="background:#fce4ec;padding:10px;border-radius:8px;font-size:0.82rem">
-        ✅ 프로 기능 전체<br>
-        ✅ Gemini AI 진단<br>
-        ✅ AI 3사 통합 의견<br>
-        ✅ 맞춤형 전략 로드맵<br>
-        ✅ PDF 보고서 출력<br>
-        ✅ 월별 트렌드 분석<br>
-        ✅ 우선순위 액션플랜
+        <div style="background:#2a3a1a;border:1px solid #4a6a2a;padding:10px 12px;border-radius:8px;font-size:0.8rem;margin-bottom:4px">
+        ✅ Pro 기능 전체 포함<br>
+        ✅ Gemini 1.5 Pro AI 진단<br>
+        ✅ AI 3사 통합 종합의견<br>
+        ✅ 맞춤형 우선순위 액션플랜<br>
+        ✅ Excel · HTML 보고서 출력
         </div>""", unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown("#### ⚙️ AI API 설정")
-    if plan in ("pro", "premium"):
-        st.session_state.api_keys["claude"]  = st.text_input("Claude API Key",  type="password", value=st.session_state.api_keys["claude"])
-        st.session_state.api_keys["openai"]  = st.text_input("OpenAI API Key",  type="password", value=st.session_state.api_keys["openai"])
-        if plan == "premium":
-            st.session_state.api_keys["gemini"] = st.text_input("Gemini API Key", type="password", value=st.session_state.api_keys["gemini"])
-        st.caption("⚠️ API 키는 세션 내에서만 사용되며 저장되지 않습니다.")
-    else:
-        st.info("Pro 이상 플랜에서 AI 진단 기능을 이용하실 수 있습니다.")
+    st.markdown('<div style="border-top:1px solid #2d4a2d;margin:14px 0 10px"></div>', unsafe_allow_html=True)
+
+    # ── AI API 설정
+    st.markdown('<div style="font-size:0.78rem;color:#7aab7a;font-weight:600;margin-bottom:6px;letter-spacing:0.5px">▸ AI API 설정</div>', unsafe_allow_html=True)
+    st.session_state.api_keys["claude"]  = st.text_input("Claude API Key",  type="password", value=st.session_state.api_keys["claude"])
+    st.session_state.api_keys["openai"]  = st.text_input("OpenAI API Key",  type="password", value=st.session_state.api_keys["openai"])
+    if plan == "premium":
+        st.session_state.api_keys["gemini"] = st.text_input("Gemini API Key", type="password", value=st.session_state.api_keys["gemini"])
+    st.caption("🔒 API 키는 세션 내에서만 사용되며 서버에 저장되지 않습니다.")
 
     st.markdown("---")
     st.markdown("#### 📁 데이터 업로드")
@@ -1020,64 +1071,82 @@ with st.sidebar:
 # ── 메인 화면 ────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="main-header">
-    <h1>🏥 병원 경영진단 시스템</h1>
-    <p>Hospital Management Diagnosis & Strategy Platform | {hospital_name}</p>
+    <div class="main-header-left">
+        <div style="font-size:0.78rem;opacity:0.7;margin-bottom:4px;letter-spacing:1px">MEDIUM Medical Premium Consulting</div>
+        <h1>🏥 병원 경영진단 시스템</h1>
+        <div class="sub">Hospital Management Diagnosis &amp; Strategy Platform &nbsp;|&nbsp; {hospital_name}</div>
+    </div>
+    <div class="main-header-right">
+        <div class="brand">주식회사 메디엄</div>
+        <div>제작 · 운영 : 조정윤</div>
+        <div style="margin-top:6px;font-size:0.72rem;opacity:0.65">경영진단 전문 솔루션 v2.0</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 if not st.session_state.get("analysis_done"):
-    # ── 랜딩 화면 ─────────────────────────────────────────────────────────
-    col1, col2, col3 = st.columns(3)
+    # ── 랜딩 화면 (MEDIUM 유료 전용) ────────────────────────────────────────
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a2e1a,#2d4a2d);border-radius:10px;
+                padding:2rem 2.5rem;margin-bottom:1.5rem;color:#d4e8d4">
+        <div style="font-size:0.75rem;letter-spacing:1.5px;color:#7aab7a;margin-bottom:8px">MEDIUM MEDICAL PREMIUM CONSULTING</div>
+        <h2 style="margin:0;color:#fff;font-size:1.5rem">병원 경영진단 시스템</h2>
+        <p style="margin:8px 0 0;opacity:0.75;font-size:0.9rem">
+        의원급 의료기관의 경영 전반을 정밀 진단하고, AI 기반 전략 방향을 제시하는 전문 컨설팅 솔루션입니다.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div class="metric-card success">
-        <h3>🆓 무료 기능</h3>
-        <ul style="font-size:0.9rem">
-        <li>기본 경영지표 시각화</li>
-        <li>매출/비용 트렌드 차트</li>
-        <li>표준 KPI 대시보드</li>
-        <li>원무 현황 분석</li>
+        <div style="background:white;border-radius:10px;padding:1.4rem;
+                    border-left:4px solid #2d6a2d;box-shadow:0 2px 12px rgba(0,0,0,0.07)">
+        <h3 style="color:#2d6a2d;margin-top:0">⭐ Pro 플랜</h3>
+        <ul style="font-size:0.88rem;color:#333;line-height:2">
+        <li>전체 경영지표 대시보드 · 시각화</li>
+        <li>매출 / 인건비 / 비용구조 심층 분석</li>
+        <li>Claude + GPT-4o AI 경영진단</li>
+        <li>업종 벤치마크 비교 분석</li>
+        <li>수익 개선 시뮬레이션</li>
+        <li>전략 로드맵 · A4 HTML 보고서</li>
         </ul>
         </div>""", unsafe_allow_html=True)
     with col2:
         st.markdown("""
-        <div class="metric-card warning">
-        <h3>⭐ Pro 기능</h3>
-        <ul style="font-size:0.9rem">
-        <li>Claude + GPT-4o AI 진단</li>
-        <li>전문 경영진단 보고서</li>
-        <li>벤치마크 비교 분석</li>
-        <li>개선 과제 도출</li>
-        </ul>
-        </div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown("""
-        <div class="metric-card danger">
-        <h3>👑 Premium 기능</h3>
-        <ul style="font-size:0.9rem">
-        <li>AI 3사 통합 진단</li>
-        <li>맞춤형 전략 로드맵</li>
-        <li>PDF 보고서 출력</li>
-        <li>우선순위 액션플랜</li>
+        <div style="background:white;border-radius:10px;padding:1.4rem;
+                    border-left:4px solid #e65100;box-shadow:0 2px 12px rgba(0,0,0,0.07)">
+        <h3 style="color:#e65100;margin-top:0">👑 Premium 플랜</h3>
+        <ul style="font-size:0.88rem;color:#333;line-height:2">
+        <li>Pro 기능 전체 포함</li>
+        <li>Gemini 1.5 Pro AI 진단 추가</li>
+        <li>Claude · GPT-4o · Gemini 3사 통합 의견</li>
+        <li>맞춤형 우선순위 액션플랜 도출</li>
+        <li>Excel · HTML 전문 보고서 출력</li>
         </ul>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
-    ### 📋 데이터 입력 가이드
-
-    좌측 사이드바에서 **샘플 데이터 사용** 을 선택하거나, 아래 양식에 맞춰 엑셀 파일을 업로드해 주세요.
-
-    | 시트명 | 필수 컬럼 | 설명 |
-    |--------|-----------|------|
-    | 인건비 | 월, 기본급합계(세전), 4대보험(사용자부담), 근로소득세, 인센티브, 퇴직충당금 | 월별 인건비 내역 |
-    | 고정비 | 월, 임차료, 렌탈료, 유지보수비, 전기료, 수도료, 통신비 | 월별 고정비 내역 |
-    | 소모품약제 | 월, 의료소모품, 약제비, 장비구입비 | 월별 구매비용 |
-    | 매출 | 월, 급여매출, 비급여매출, 총매출 | 월별 매출 내역 |
-    | 원무 | 월, 신환수, 총내원환자수, 총내원횟수, 주상병1 | 월별 원무 현황 |
-    | 직원현황 | 직종, 인원수, 평균급여(세전) | 직원 구성 현황 |
-    | 마케팅 | 월, 온라인광고비, 오프라인광고비 | 마케팅 비용 |
-    """)
+    <div style="background:white;border-radius:10px;padding:1.4rem;
+                box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:1rem">
+    <h4 style="color:#1a3a1a;margin-top:0">📋 엑셀 데이터 입력 양식 안내</h4>
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <tr style="background:#2d6a2d;color:white">
+      <th style="padding:7px 10px;text-align:left">시트명</th>
+      <th style="padding:7px 10px;text-align:left">주요 입력 항목</th>
+      <th style="padding:7px 10px;text-align:left">설명</th>
+    </tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid #eee">인건비</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월, 기본급합계(세전), 4대보험, 근로소득세, 인센티브, 퇴직충당금</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월별 인건비 내역</td></tr>
+    <tr style="background:#f9fbf9"><td style="padding:6px 10px;border-bottom:1px solid #eee">고정비</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월, 임차료, 렌탈료, 유지보수비, 전기료, 수도료, 통신비</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월별 고정비 내역</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid #eee">소모품약제</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월, 의료소모품, 약제비, 장비구입비, 기타소모품</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월별 구매비용</td></tr>
+    <tr style="background:#f9fbf9"><td style="padding:6px 10px;border-bottom:1px solid #eee">매출</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월, 급여매출, 비급여매출, 총매출</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월별 매출 내역</td></tr>
+    <tr><td style="padding:6px 10px;border-bottom:1px solid #eee">원무</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월, 신환수(초진), 재진수, 총내원환자수, 주상병1</td><td style="padding:6px 10px;border-bottom:1px solid #eee">월별 원무 현황</td></tr>
+    <tr style="background:#f9fbf9"><td style="padding:6px 10px;border-bottom:1px solid #eee">직원현황</td><td style="padding:6px 10px;border-bottom:1px solid #eee">직종, 인원수, 평균급여(세전)</td><td style="padding:6px 10px;border-bottom:1px solid #eee">직원 구성 현황</td></tr>
+    <tr><td style="padding:6px 10px">마케팅</td><td style="padding:6px 10px">월, 온라인광고비, 오프라인광고비</td><td style="padding:6px 10px">마케팅 비용</td></tr>
+    </table>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.info("👈 좌측 사이드바에서 '샘플 데이터 사용'을 선택하고 **분석 실행** 버튼을 눌러주세요.")
     st.stop()
@@ -1102,7 +1171,7 @@ tabs = st.tabs([
 # TAB 1: 대시보드
 # ════════════════════════════════════════════════════════
 with tabs[0]:
-    st.markdown('<div class="section-header">📊 핵심 경영지표 대시보드 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 핵심 경영지표 대시보드 </div>', unsafe_allow_html=True)
 
     rev = analysis.get("revenue", {})
     lab = analysis.get("labor", {})
@@ -1143,8 +1212,8 @@ with tabs[0]:
                 r=scores + [scores[0]],
                 theta=categories + [categories[0]],
                 fill='toself',
-                fillcolor='rgba(21,101,192,0.2)',
-                line=dict(color='#1565c0', width=2),
+                fillcolor='rgba(45,106,45,0.2)',
+                line=dict(color='#2d6a2d', width=2),
                 marker=dict(size=6)
             ))
             fig_radar.update_layout(
@@ -1162,18 +1231,18 @@ with tabs[0]:
             if "급여매출" in rev_df.columns:
                 fig_rev.add_bar(
                     x=rev_df["월"], y=rev_df["급여매출"],
-                    name="급여매출", marker_color="#1565c0",
+                    name="급여매출", marker_color="#2d6a2d",
                     hovertemplate="<b>%{x}</b><br>급여매출: %{customdata}<extra></extra>",
                     customdata=[fmt_krw(v) for v in rev_df["급여매출"]])
             if "비급여매출" in rev_df.columns:
                 fig_rev.add_bar(
                     x=rev_df["월"], y=rev_df["비급여매출"],
-                    name="비급여매출", marker_color="#42a5f5",
+                    name="비급여매출", marker_color="#81c784",
                     hovertemplate="<b>%{x}</b><br>비급여매출: %{customdata}<extra></extra>",
                     customdata=[fmt_krw(v) for v in rev_df["비급여매출"]])
             fig_rev.add_scatter(
                 x=rev_df["월"], y=rev_df["총매출"],
-                name="총매출", line=dict(color="#ff6f00", width=2.5),
+                name="총매출", line=dict(color="#e65100", width=2.5),
                 hovertemplate="<b>%{x}</b><br>총매출: %{customdata}<extra></extra>",
                 customdata=[fmt_krw(v) for v in rev_df["총매출"]])
             fig_rev.update_layout(
@@ -1197,7 +1266,7 @@ with tabs[0]:
         if cost_items:
             fig_pie = px.pie(values=list(cost_items.values()),
                              names=list(cost_items.keys()),
-                             color_discrete_sequence=px.colors.sequential.Blues_r)
+                             color_discrete_sequence=px.colors.sequential.Greens_r)
             fig_pie.update_layout(height=280, margin=dict(l=0,r=0,t=20,b=0))
             st.plotly_chart(fig_pie, use_container_width=True)
     with c2:
@@ -1207,7 +1276,7 @@ with tabs[0]:
             fig_pt = px.bar(out_df, x="월", y="총내원환자수",
                             color="신환수" if "신환수" in out_df.columns else None,
                             title="월별 내원환자 현황",
-                            color_continuous_scale="Blues")
+                            color_continuous_scale="Greens")
             fig_pt.update_layout(height=280, margin=dict(l=0,r=0,t=30,b=0))
             st.plotly_chart(fig_pt, use_container_width=True)
 
@@ -1215,7 +1284,7 @@ with tabs[0]:
 # TAB 2: 매출분석
 # ════════════════════════════════════════════════════════
 with tabs[1]:
-    st.markdown('<div class="section-header">💰 매출 상세 분석 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">💰 매출 상세 분석 </div>', unsafe_allow_html=True)
     rev_df = data.get("매출", pd.DataFrame())
 
     if rev_df.empty:
@@ -1261,8 +1330,8 @@ with tabs[1]:
 
 
 
-        if plan in ("pro", "premium"):
-            st.markdown('<div class="section-header">📊 업종 벤치마크 비교 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">📊 업종 벤치마크 비교</div>', unsafe_allow_html=True)
+        if True:
             avg_rev = rev_df["총매출"].mean() if "총매출" in rev_df.columns else 0
             bench = {
                 "지표": ["월평균 매출","비급여 비율"],
@@ -1272,14 +1341,13 @@ with tabs[1]:
                 "상위 20%":  [fmt_krw(55000000), "45.0%"],
             }
             st.dataframe(pd.DataFrame(bench), use_container_width=True, hide_index=True)
-        else:
-            st.markdown('<div class="lock-overlay">🔒 벤치마크 비교는 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════
 # TAB 3: 인건비 분석
 # ════════════════════════════════════════════════════════
 with tabs[2]:
-    st.markdown('<div class="section-header">👥 인건비 상세 분석 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">👥 인건비 상세 분석 </div>', unsafe_allow_html=True)
     lab_df  = data.get("인건비", pd.DataFrame())
     stf_df  = data.get("직원현황", pd.DataFrame())
 
@@ -1327,7 +1395,7 @@ with tabs[2]:
                 if "인원수" in stf_df.columns and "직종" in stf_df.columns:
                     fig_stf = px.pie(stf_df, values="인원수", names="직종",
                                      title="직종별 인원 구성",
-                                     color_discrete_sequence=px.colors.sequential.Blues_r)
+                                     color_discrete_sequence=px.colors.sequential.Greens_r)
                     fig_stf.update_layout(height=280)
                     st.plotly_chart(fig_stf, use_container_width=True)
 
@@ -1342,7 +1410,7 @@ with tabs[2]:
             delta={'reference':50},
             gauge={
                 'axis':{'range':[0,80]},
-                'bar':{'color':"#1565c0"},
+                'bar':{'color':"#2d6a2d"},
                 'steps':[
                     {'range':[0,45],'color':'#c8e6c9'},
                     {'range':[45,55],'color':'#fff9c4'},
@@ -1359,7 +1427,7 @@ with tabs[2]:
 # TAB 4: 비용구조
 # ════════════════════════════════════════════════════════
 with tabs[3]:
-    st.markdown('<div class="section-header">🏢 고정비 & 원가 분석 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🏢 고정비 & 원가 분석 </div>', unsafe_allow_html=True)
 
     fix_df = data.get("고정비", pd.DataFrame())
     sup_df = data.get("소모품약제", pd.DataFrame())
@@ -1436,8 +1504,8 @@ with tabs[3]:
                 yaxis=dict(tickformat=",.0f"))
             st.plotly_chart(fig3, use_container_width=True)
 
-    if plan in ("pro","premium"):
-        st.markdown('<div class="section-header">🔍 비용 절감 기회 분석 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🔍 비용 절감 기회 분석</div>', unsafe_allow_html=True)
+    if True:
         fix_ratio = analysis["fixed"]["ratio_to_revenue"]
         sup_ratio = analysis["supply"]["ratio_to_revenue"]
         data_rows = []
@@ -1455,14 +1523,13 @@ with tabs[3]:
             st.dataframe(pd.DataFrame(data_rows), use_container_width=True, hide_index=True)
         else:
             st.success("✅ 비용 구조가 업종 평균 대비 양호한 수준입니다.")
-    else:
-        st.markdown('<div class="lock-overlay">🔒 비용 절감 기회 분석은 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════
 # TAB 5: 원무분석
 # ════════════════════════════════════════════════════════
 with tabs[4]:
-    st.markdown('<div class="section-header">🏥 원무 상세 분석 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🏥 원무 상세 분석 </div>', unsafe_allow_html=True)
     out_df = data.get("원무", pd.DataFrame())
 
     if out_df.empty:
@@ -1485,7 +1552,7 @@ with tabs[4]:
                     out_df[_revisit] = out_df["총내원환자수"] - out_df[_new_col]
                 fig = go.Figure()
                 fig.add_bar(x=out_df["월"], y=out_df[_new_col],
-                            name="초진(신환)", marker_color="#1565c0",
+                            name="초진(신환)", marker_color="#2d6a2d",
                             hovertemplate="<b>%{x}</b><br>초진: %{y:,}명<extra></extra>")
                 fig.add_bar(x=out_df["월"], y=out_df[_revisit],
                             name="재진", marker_color="#90caf9",
@@ -1500,7 +1567,7 @@ with tabs[4]:
                 fig2 = go.Figure()
                 fig2.add_scatter(x=out_df["월"], y=out_df[_new_col],
                                  mode="lines+markers", name="초진(신환)",
-                                 line=dict(color="#1565c0", width=2),
+                                 line=dict(color="#2d6a2d", width=2),
                                  hovertemplate="<b>%{x}</b><br>초진: %{y:,}명<extra></extra>")
                 fig2.add_hline(y=avg_new, line_dash="dash", line_color="red",
                                annotation_text=f"평균 {avg_new:.0f}명")
@@ -1515,7 +1582,7 @@ with tabs[4]:
             fig3 = px.bar(disease_count.sort_values("월수", ascending=True),
                           x="월수", y="상병명", orientation="h",
                           title="주요 상병 빈도", color="월수",
-                          color_continuous_scale="Blues")
+                          color_continuous_scale="Greens")
             fig3.update_layout(height=280)
             st.plotly_chart(fig3, use_container_width=True)
 
@@ -1523,7 +1590,7 @@ with tabs[4]:
 # TAB 6: 수익성 분석
 # ════════════════════════════════════════════════════════
 with tabs[5]:
-    st.markdown('<div class="section-header">📈 수익성 심층 분석 <span class="free-badge">FREE</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📈 수익성 심층 분석 </div>', unsafe_allow_html=True)
 
     pro_info = analysis.get("profitability",{})
     rev_info = analysis.get("revenue",{})
@@ -1570,7 +1637,7 @@ with tabs[5]:
         text=[fmt_krw(v) for v in [rev_total,-lab_total,-fix_total,-sup_total,-mkt_total,op_profit]],
         y=[rev_total,-lab_total,-fix_total,-sup_total,-mkt_total,op_profit],
         connector={"line":{"color":"rgb(63,63,63)"}},
-        increasing={"marker":{"color":"#1565c0"}},
+        increasing={"marker":{"color":"#2d6a2d"}},
         decreasing={"marker":{"color":"#c62828"}},
         totals={"marker":{"color":"#2e7d32"}},
         hovertemplate="<b>%{x}</b><br>금액: %{text}<extra></extra>"
@@ -1581,8 +1648,8 @@ with tabs[5]:
         yaxis=dict(tickformat=",.0f"))
     st.plotly_chart(fig_wf, use_container_width=True)
 
-    if plan in ("pro","premium"):
-        st.markdown('<div class="section-header">📊 수익 개선 시뮬레이션 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 수익 개선 시뮬레이션</div>', unsafe_allow_html=True)
+    if True:
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("##### 📉 비용 절감 시나리오")
@@ -1609,108 +1676,118 @@ with tabs[5]:
         sc1.metric("예상 연간 매출",  fmt_krw(new_rev),    f"{(new_rev-rev_total)/rev_total*100:+.1f}%")
         sc2.metric("예상 영업이익",   fmt_krw(new_profit),  f"{(new_profit-op_profit)/max(abs(op_profit),1)*100:+.1f}%")
         sc3.metric("예상 영업이익률", f"{new_margin:.1f}%", f"{new_margin-pro_info.get('op_margin',0):+.1f}%p")
-    else:
-        st.markdown('<div class="lock-overlay">🔒 수익 개선 시뮬레이션은 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════
 # TAB 7: AI 진단
 # ════════════════════════════════════════════════════════
 with tabs[6]:
-    st.markdown('<div class="section-header">🤖 AI 멀티엔진 진단 <span class="pro-badge">PRO+</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🤖 AI 멀티엔진 진단</div>', unsafe_allow_html=True)
 
-    if plan == "free":
-        st.markdown("""
-        <div class="lock-overlay">
-        <h3>🔒 AI 진단은 유료 플랜 전용 기능입니다</h3>
-        <p>Pro 또는 Premium 플랜으로 업그레이드하여 Claude, GPT-4o, Gemini AI의 전문적인 병원 경영 진단을 받아보세요.</p>
-        <br>
-        <b>AI 진단 제공 내용:</b><br>
-        ✅ 수익구조 심층 분석 | ✅ 비용 절감 방안 | ✅ 환자 관리 전략<br>
-        ✅ 리스크 진단 | ✅ 전략적 로드맵 | ✅ 벤치마크 비교
-        </div>
-        """, unsafe_allow_html=True)
+    ai_prompt = build_ai_prompt(
+        st.session_state.hospital_name,
+        analysis,
+        data
+    )
+
+    _ais = ["Claude (Anthropic)", "GPT-4o (OpenAI)"]
+    if plan == "premium":
+        _ais.append("Gemini 1.5 Pro (Google)")
+    st.markdown(
+        f'<div style="background:#e8f5e8;border:1px solid #b2d4b2;border-radius:8px;'
+        f'padding:0.7rem 1.2rem;margin-bottom:1rem;font-size:0.9rem;color:#1a3a1a">'
+        f'🤖 <b>사용 가능한 AI 엔진:</b> {", ".join(_ais)}</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+
+    # ── Claude
+    st.markdown("### 🟣 Claude (Anthropic) 진단")
+    api_key_claude = st.session_state.api_keys.get("claude", "")
+    if api_key_claude:
+        if st.button("Claude로 진단 실행", key="btn_claude"):
+            with st.spinner("Claude가 분석 중입니다... (1~2분 소요)"):
+                result = call_claude(api_key_claude, ai_prompt)
+                st.session_state.ai_results["claude"] = result
+        if "claude" in st.session_state.ai_results:
+            st.markdown(
+                f'<div class="ai-response">{st.session_state.ai_results["claude"]}</div>',
+                unsafe_allow_html=True
+            )
     else:
-        ai_prompt = build_ai_prompt(
-            st.session_state.hospital_name,
-            analysis,
-            data
+        st.info("사이드바에서 Claude API Key를 입력해 주세요.")
+
+    st.markdown("---")
+
+    # ── GPT-4o
+    st.markdown("### 🟢 GPT-4o (OpenAI) 진단")
+    api_key_openai = st.session_state.api_keys.get("openai", "")
+    if api_key_openai:
+        if st.button("GPT-4o로 진단 실행", key="btn_openai"):
+            with st.spinner("GPT-4o가 분석 중입니다... (1~2분 소요)"):
+                result = call_openai(api_key_openai, ai_prompt)
+                st.session_state.ai_results["openai"] = result
+        if "openai" in st.session_state.ai_results:
+            st.markdown(
+                f'<div class="ai-response">{st.session_state.ai_results["openai"]}</div>',
+                unsafe_allow_html=True
+            )
+    else:
+        st.info("사이드바에서 OpenAI API Key를 입력해 주세요.")
+
+    # ── Gemini (Premium)
+    if plan == "premium":
+        st.markdown("---")
+        st.markdown(
+            "### 🔵 Gemini 1.5 Pro (Google) 진단 "
+            "<span class='premium-badge'>PREMIUM</span>",
+            unsafe_allow_html=True
         )
-
-        available_ais = []
-        if plan in ("pro","premium"):
-            available_ais = ["Claude (Anthropic)", "GPT-4o (OpenAI)"]
-        if plan == "premium":
-            available_ais.append("Gemini 1.5 Pro (Google)")
-
-        st.markdown(f"**사용 가능한 AI:** {', '.join(available_ais)}")
-        st.markdown("---")
-
-        # Claude
-        st.markdown("### 🟣 Claude (Anthropic) 진단")
-        api_key_claude = st.session_state.api_keys.get("claude","")
-        if api_key_claude:
-            if st.button("Claude로 진단 실행", key="btn_claude"):
-                with st.spinner("Claude가 분석 중입니다... (1~2분 소요)"):
-                    result = call_claude(api_key_claude, ai_prompt)
-                    st.session_state.ai_results["claude"] = result
-            if "claude" in st.session_state.ai_results:
-                st.markdown(f'<div class="ai-response">{st.session_state.ai_results["claude"]}</div>', unsafe_allow_html=True)
+        api_key_gemini = st.session_state.api_keys.get("gemini", "")
+        if api_key_gemini:
+            if st.button("Gemini로 진단 실행", key="btn_gemini"):
+                with st.spinner("Gemini가 분석 중입니다... (1~2분 소요)"):
+                    result = call_gemini(api_key_gemini, ai_prompt)
+                    st.session_state.ai_results["gemini"] = result
+            if "gemini" in st.session_state.ai_results:
+                st.markdown(
+                    f'<div class="ai-response">{st.session_state.ai_results["gemini"]}</div>',
+                    unsafe_allow_html=True
+                )
         else:
-            st.info("사이드바에서 Claude API Key를 입력해 주세요.")
+            st.info("사이드바에서 Gemini API Key를 입력해 주세요.")
 
-        st.markdown("---")
-
-        # GPT-4o
-        st.markdown("### 🟢 GPT-4o (OpenAI) 진단")
-        api_key_openai = st.session_state.api_keys.get("openai","")
-        if api_key_openai:
-            if st.button("GPT-4o로 진단 실행", key="btn_openai"):
-                with st.spinner("GPT-4o가 분석 중입니다... (1~2분 소요)"):
-                    result = call_openai(api_key_openai, ai_prompt)
-                    st.session_state.ai_results["openai"] = result
-            if "openai" in st.session_state.ai_results:
-                st.markdown(f'<div class="ai-response">{st.session_state.ai_results["openai"]}</div>', unsafe_allow_html=True)
-        else:
-            st.info("사이드바에서 OpenAI API Key를 입력해 주세요.")
-
-        # Gemini (Premium only)
-        if plan == "premium":
+        # ── AI 통합 의견
+        if len(st.session_state.ai_results) >= 2:
             st.markdown("---")
-            st.markdown("### 🔵 Gemini 1.5 Pro (Google) 진단 <span class='premium-badge'>PREMIUM</span>", unsafe_allow_html=True)
-            api_key_gemini = st.session_state.api_keys.get("gemini","")
-            if api_key_gemini:
-                if st.button("Gemini로 진단 실행", key="btn_gemini"):
-                    with st.spinner("Gemini가 분석 중입니다... (1~2분 소요)"):
-                        result = call_gemini(api_key_gemini, ai_prompt)
-                        st.session_state.ai_results["gemini"] = result
-                if "gemini" in st.session_state.ai_results:
-                    st.markdown(f'<div class="ai-response">{st.session_state.ai_results["gemini"]}</div>', unsafe_allow_html=True)
-            else:
-                st.info("사이드바에서 Gemini API Key를 입력해 주세요.")
-
-            # AI 통합 의견 (Premium)
-            if len(st.session_state.ai_results) >= 2:
-                st.markdown("---")
-                st.markdown("### 🌟 AI 통합 종합 의견 <span class='premium-badge'>PREMIUM</span>", unsafe_allow_html=True)
-                if st.button("AI 통합 의견 생성", key="btn_integrate"):
-                    ai_summaries = "\n\n".join([
-                        f"[{k.upper()} 진단 요약]:\n{v[:800]}..."
-                        for k,v in st.session_state.ai_results.items()
-                    ])
-                    integrate_prompt = f"""
-다음은 3개 AI의 병원 경영 진단 결과입니다. 각 AI의 공통점과 차이점을 분석하고,
+            st.markdown(
+                "### 🌟 AI 통합 종합 의견 "
+                "<span class='premium-badge'>PREMIUM</span>",
+                unsafe_allow_html=True
+            )
+            if st.button("AI 통합 의견 생성", key="btn_integrate"):
+                ai_summaries = "\n\n".join([
+                    f"[{k.upper()} 진단 요약]:\n{v[:800]}..."
+                    for k, v in st.session_state.ai_results.items()
+                ])
+                integrate_prompt = f"""
+다음은 여러 AI의 병원 경영 진단 결과입니다. 각 AI의 공통점과 차이점을 분석하고,
 가장 중요한 핵심 과제 5가지와 우선순위 액션플랜을 도출해 주세요.
 
 {ai_summaries}
 
 결론은 간결하고 실행 가능한 형태로 작성해 주세요.
 """
-                    if api_key_claude:
-                        with st.spinner("통합 의견 생성 중..."):
-                            integrated = call_claude(api_key_claude, integrate_prompt)
-                            st.session_state.ai_results["integrated"] = integrated
-                if "integrated" in st.session_state.ai_results:
-                    st.markdown(f'<div class="report-box">{st.session_state.ai_results["integrated"]}</div>', unsafe_allow_html=True)
+                _key = st.session_state.api_keys.get("claude", "")
+                if _key:
+                    with st.spinner("통합 의견 생성 중..."):
+                        integrated = call_claude(_key, integrate_prompt)
+                        st.session_state.ai_results["integrated"] = integrated
+            if "integrated" in st.session_state.ai_results:
+                st.markdown(
+                    f'<div class="report-box">{st.session_state.ai_results["integrated"]}</div>',
+                    unsafe_allow_html=True
+                )
 
 # ════════════════════════════════════════════════════════
 # TAB 8: 종합 보고서
@@ -1729,13 +1806,13 @@ with tabs[7]:
 
     st.markdown(f"""
     <div class="report-box">
-    <h2 style="text-align:center;color:#1a237e">병원 경영진단 보고서</h2>
+    <h2 style="text-align:center;color:#1a3a1a">병원 경영진단 보고서</h2>
     <p style="text-align:center;color:#555">진단일: {now} | 병원명: {st.session_state.hospital_name}</p>
     <hr>
 
     <h3>1. 경영 현황 요약</h3>
     <table width="100%" style="border-collapse:collapse;font-size:0.9rem">
-    <tr style="background:#e3f2fd"><th style="padding:6px;border:1px solid #ccc">구분</th><th style="padding:6px;border:1px solid #ccc">지표</th><th style="padding:6px;border:1px solid #ccc;text-align:right">수치</th><th style="padding:6px;border:1px solid #ccc">평가</th></tr>
+    <tr style="background:#2d6a2d"><th style="padding:6px;border:1px solid #ccc;color:white">구분</th><th style="padding:6px;border:1px solid #ccc">지표</th><th style="padding:6px;border:1px solid #ccc;text-align:right">수치</th><th style="padding:6px;border:1px solid #ccc">평가</th></tr>
     <tr>
       <td style="padding:6px;border:1px solid #eee">매출</td>
       <td style="padding:6px;border:1px solid #eee">연간 총매출</td>
@@ -1825,8 +1902,8 @@ with tabs[7]:
         </div>
         """, unsafe_allow_html=True)
 
-    if plan in ("pro","premium"):
-        st.markdown('<div class="section-header">🗺️ 전략 로드맵 <span class="pro-badge">PRO</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🗺️ 전략 로드맵</div>', unsafe_allow_html=True)
+    if True:
         st.markdown("""
         <div class="report-box">
         <h4>📅 단계별 전략 과제</h4>
@@ -1910,15 +1987,20 @@ with tabs[7]:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-    else:
-        st.markdown('<div class="lock-overlay">🔒 전략 로드맵 및 보고서 출력은 Pro 이상 플랜에서 이용 가능합니다</div>', unsafe_allow_html=True)
+
 
 # ── 푸터 ─────────────────────────────────────────────────────────────────────
-st.markdown("---")
 st.markdown("""
-<div style="text-align:center;color:#aaa;font-size:0.8rem;padding:1rem">
-🏥 병원 경영진단 시스템 v1.0 | Hospital Management Diagnosis Platform<br>
-본 시스템의 진단 결과는 참고용이며, 최종 경영 결정은 전문 컨설턴트와 상담하시기 바랍니다.<br>
-API 키는 세션 내에서만 사용되며 서버에 저장되지 않습니다.
+<div class="medium-footer">
+    <div class="brand">주식회사 메디엄 &nbsp;|&nbsp; 제작·운영 : 조정윤</div>
+    <div class="copy">
+        병원 경영진단 시스템 v2.0 &nbsp;|&nbsp; Hospital Management Diagnosis &amp; Strategy Platform<br>
+        본 시스템의 진단 결과는 참고용이며, 최종 경영 결정은 전문 컨설턴트와 상담하시기 바랍니다.<br>
+        API 키는 세션 내에서만 사용되며 서버에 저장되지 않습니다.
+    </div>
+    <div class="warn">
+        ⚠️ 본 시스템의 모든 저작권은 <b>주식회사 메디엄 조정윤</b>에 있으며,<br>
+        무단 도용 및 배포 시 사전 경고 없이 법적 조치를 취할 수 있습니다.
+    </div>
 </div>
 """, unsafe_allow_html=True)
